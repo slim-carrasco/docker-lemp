@@ -46,9 +46,9 @@ docker exec lemp-nginx ping php
 > El archivo .env nunca debe subir a GitHub
 
 # Arquitectura
-Request: Usuario -> Navegador -> HTTP request -> Nginx -> FastCGI -> PHP-FPM -> MySql
-Response: MySql -> .html/.php -> PHP-FPM -> FastCGI -> Nginx -> HTTP response -> Usuario
-Nota: Nginx y PHP se encuentran en una red(bridge) frontend y PHP y MySql se encuentra en la red backend esto por seguridad y lest privile
+- Request: Usuario -> Navegador -> HTTP request -> Nginx -> FastCGI -> PHP-FPM -> MySql
+- Response: MySql -> .html/.php -> PHP-FPM -> FastCGI -> Nginx -> HTTP response -> Usuario
+- Nota: Nginx y PHP se encuentran en una red(bridge) frontend y PHP y MySql se encuentra en la red backend esto por seguridad y lest privile
 
 # Variables de entorno
 |Variable|Requerido|Descripción|
