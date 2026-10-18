@@ -49,6 +49,11 @@ services:
         VERSION: 8.2
     volumes:
       - ./php/src:/var/www/html
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      MYSQL_USER: ${MYSQL_USER}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
     networks:
       - backend
       - frontend
