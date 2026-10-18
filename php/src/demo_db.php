@@ -1,9 +1,11 @@
 <?php
+
+
 // Datos de conexión
 $host = "mysql";
-$user = "user-lemp";
-$pass = "user123";
-$db = "db-lemp";
+$user = getenv("MYSQL_USER");
+$pass = getenv("MYSQL_PASSWORD");
+$db   = getenv("MYSQL_DATABASE");
 
 // Conectar
 $conn = mysqli_connect($host, $user, $pass, $db);
