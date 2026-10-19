@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Recetario · Frizka</title>
+  <title>Recetario</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232563eb'/%3E%3Ctext x='16' y='23' font-size='20' text-anchor='middle' fill='white' font-family='sans-serif'%3ER%3C/text%3E%3C/svg%3E"/>
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500&display=swap" rel="stylesheet"/>
   <link href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.11.0/dist/tabler-icons.min.css" rel="stylesheet"/>
@@ -15,7 +16,7 @@
       --font-voice:'Playfair Display',Georgia,serif;
       --radius:8px;
       --surface-0:#f8f5f0;--surface-1:#ede9e1;--surface-2:#ffffff;
-      --text-primary:#1a1a1a;--text-secondary:#4a4542;--text-muted:#8a8480;
+      --text-primary:#1a1a1a;--text-secondary:#4a4542;--text-muted:#6b6560;
       --text-accent:#1d6ef5;--text-danger:#c0392b;--text-success:#1a7a3c;--text-warning:#b45309;
       --border:rgba(0,0,0,.10);--border-strong:rgba(0,0,0,.16);
       --border-accent:#3b82f6;--border-danger:#e74c3c;
@@ -33,19 +34,31 @@
 </head>
 <body>
 <div id="root"></div>
-<script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script type="text/babel">
-const { useState, useEffect, useRef, useCallback } = React;
+const { useState, useEffect, useRef } = React;
 
 // ── Config ────────────────────────────────────────────────────────────────
 const API = '/recetario/api.php';
-const get  = (entity, id) => fetch(`${API}?entity=${entity}${id ? '&id='+id : ''}`).then(r=>r.json());
-const getAll = (entity) => fetch(`${API}?entity=${entity}`).then(r=>r.json());
-const post = (entity, body) => fetch(`${API}?entity=${entity}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
-const put  = (entity, id, body) => fetch(`${API}?entity=${entity}&id=${id}`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
-const del  = (entity, id) => fetch(`${API}?entity=${entity}&id=${id}`,{method:'DELETE'}).then(r=>r.json());
+
+// Toda respuesta con error HTTP o con campo "error" lanza una excepción
+async function req(url, opts){
+  const r = await fetch(url, opts);
+  let data = null;
+  try { data = await r.json(); } catch (e) { data = null; }
+  if (!r.ok || (data && data.error)) {
+    throw new Error((data && data.error) || ('Error ' + r.status));
+  }
+  return data;
+}
+const jsonOpts = (method, body) => ({method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+const get    = (entity, id) => req(`${API}?entity=${entity}${id ? '&id='+id : ''}`);
+const getAll = (entity) => req(`${API}?entity=${entity}`);
+const post   = (entity, body) => req(`${API}?entity=${entity}`, jsonOpts('POST', body));
+const put    = (entity, id, body) => req(`${API}?entity=${entity}&id=${id}`, jsonOpts('PUT', body));
+const del    = (entity, id) => req(`${API}?entity=${entity}&id=${id}`, {method:'DELETE'});
 
 // ── Utils ─────────────────────────────────────────────────────────────────
 const uid  = () => Math.random().toString(36).slice(2,9);
@@ -96,7 +109,6 @@ function CarpetaBadge({color,nombre}){
 // ── RecipeList ────────────────────────────────────────────────────────────
 function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
   const[search,setSearch]=useState('');
-  const[searchIng,setSearchIng]=useState(false);
   const[carpetaFiltro,setCarpetaFiltro]=useState('all');
 
   const filtered = recipes.filter(r=>{
@@ -106,27 +118,20 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
       if(carpetaFiltro!=='sin' && String(r.carpeta_id)!==carpetaFiltro) return false;
     }
     if(!q) return true;
-    if(r.nombre.toLowerCase().includes(q)) return true;
-    if(searchIng && r._ing_search && r._ing_search.includes(q)) return true;
-    return false;
+    return r.nombre.toLowerCase().includes(q);
   });
 
   return(
     <div>
-      {/* Barra de búsqueda */}
       <div style={{display:'flex',gap:6,marginBottom:10}}>
         <div style={{flex:1,position:'relative'}}>
           <i className="ti ti-search" style={{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',fontSize:13,color:'var(--text-muted)',pointerEvents:'none'}}/>
           <input style={{...S.inp,paddingLeft:30}} placeholder="Buscar receta..." value={search} onChange={e=>setSearch(e.target.value)}/>
         </div>
-        <button onClick={()=>setSearchIng(s=>!s)} style={{...(searchIng?S.acct:{}),fontSize:12,padding:'7px 10px',whiteSpace:'nowrap'}} title="Buscar también en ingredientes">
-          <i className="ti ti-carrot" style={{marginRight:4,fontSize:12}}/>Ingredientes
-        </button>
       </div>
 
-      {/* Filtro carpetas */}
       <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
-        {[{id:'all',nombre:'Todas',color:'#8a8480'},{id:'sin',nombre:'Sin carpeta',color:'#aaa'},...carpetas].map(c=>(
+        {[{id:'all',nombre:'Todas',color:'#6b6560'},{id:'sin',nombre:'Sin carpeta',color:'#777'},...carpetas].map(c=>(
           <button key={c.id} onClick={()=>setCarpetaFiltro(String(c.id))}
             style={{fontSize:11,padding:'4px 10px',borderRadius:99,background:String(carpetaFiltro)===String(c.id)?c.color+'22':'transparent',color:String(carpetaFiltro)===String(c.id)?c.color:'var(--text-muted)',border:`1px solid ${String(carpetaFiltro)===String(c.id)?c.color+'66':'var(--border)'}`,transition:'all .15s'}}>
             {c.nombre}
@@ -135,7 +140,6 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
         <button onClick={onManageCarpetas} style={{fontSize:11,padding:'4px 10px',borderRadius:99,color:'var(--text-muted)',borderStyle:'dashed'}}><i className="ti ti-folder-plus" style={{fontSize:11,marginRight:3}}/>Carpetas</button>
       </div>
 
-      {/* Acciones */}
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:8}}>
         <span style={{fontSize:13,color:'var(--text-muted)'}}>{filtered.length} receta{filtered.length!==1?'s':''}</span>
         <div style={{display:'flex',gap:6}}>
@@ -147,7 +151,7 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
       {filtered.length===0?(
         <div style={{textAlign:'center',padding:'48px 20px',color:'var(--text-muted)'}}>
           <i className="ti ti-file-plus" style={{fontSize:36,display:'block',marginBottom:10}}/>
-          <p style={{fontSize:14,color:'var(--text-secondary)'}}>{search?'Sin resultados':'Agrega tu primera receta o importa un JSON'}</p>
+          <p style={{fontSize:14,color:'var(--text-secondary)'}}>{search?'Sin resultados para esa búsqueda':carpetaFiltro!=='all'?'No hay recetas en esta carpeta':'Agrega tu primera receta o importa un JSON'}</p>
         </div>
       ):(
         <div style={{display:'grid',gap:8}}>
@@ -164,10 +168,10 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
                 </div>
               </div>
               {r.descripcion&&<p style={{fontSize:13,color:'var(--text-muted)',lineHeight:1.5,marginBottom:6}}>{r.descripcion}</p>}
-              <div style={{display:'flex',gap:12,fontSize:11,color:'var(--text-muted)'}}>
+              <div style={{display:'flex',gap:12,fontSize:11,color:'var(--text-muted)',flexWrap:'wrap'}}>
                 <span><i className="ti ti-users" style={{fontSize:11,marginRight:3}}/>{r.porciones_base} porciones</span>
                 <span><i className="ti ti-list-check" style={{fontSize:11,marginRight:3}}/>{r.n_pasos} pasos</span>
-                {r.n_errores>0&&<span style={{color:'var(--text-danger)'}}><i className="ti ti-alert-circle" style={{fontSize:11,marginRight:3}}/>{r.n_errores} error{r.n_errores!==1?'es':''}</span>}
+                {r.n_errores>0&&<span style={{color:'var(--text-warning)'}}><i className="ti ti-notes" style={{fontSize:11,marginRight:3}}/>{r.n_errores} error{r.n_errores!==1?'es':''} registrado{r.n_errores!==1?'s':''}</span>}
               </div>
             </div>
           ))}
@@ -209,10 +213,9 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
         <button onClick={onCook} style={S.acct}><i className="ti ti-chef-hat" style={{marginRight:4}}/>Modo cocina</button>
         <button onClick={onEdit}><i className="ti ti-edit" style={{marginRight:4}}/>Editar</button>
         <button onClick={copyJSON}><i className={`ti ti-${copied?'check':'copy'}`} style={{marginRight:4}}/>{copied?'Copiado':'Copiar JSON'}</button>
-        <button onClick={onDelete} style={S.danger}><i className="ti ti-trash"/></button>
+        <button onClick={onDelete} style={S.danger} title="Eliminar receta"><i className="ti ti-trash"/></button>
       </div>
 
-      {/* Escalado */}
       <div style={{display:'inline-flex',alignItems:'center',gap:12,padding:'8px 14px',borderRadius:'var(--radius)',background:'var(--bg-accent)',border:'.5px solid var(--border-accent)',marginBottom:24}}>
         <span style={{fontSize:12,color:'var(--text-muted)'}}>Porciones</span>
         <button onClick={()=>setSvgs(s=>Math.max(1,s-1))} style={{width:26,height:26,borderRadius:99,padding:0,display:'flex',alignItems:'center',justifyContent:'center'}}><i className="ti ti-minus" style={{fontSize:12}}/></button>
@@ -230,7 +233,7 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
                 <span style={{fontSize:13,color:'var(--text-primary)',flex:1}}>{ing.nombre}</span>
                 <div style={{display:'flex',gap:12,alignItems:'center',marginLeft:12,flexShrink:0}}>
                   <span style={{fontSize:13,fontWeight:500,color:'var(--text-accent)',whiteSpace:'nowrap'}}>{s!=null?`${s}${ing.unidad?' '+ing.unidad:''}`:'c/n'}</span>
-                  <span style={{fontSize:12,color:p!=null?'var(--text-success)':'var(--text-muted)',minWidth:64,textAlign:'right',whiteSpace:'nowrap'}}>{p!=null?`S/. ${p.toFixed(2)}`:'sin precio'}</span>
+                  <span style={{fontSize:12,color:p!=null?'var(--text-success)':'var(--text-muted)',minWidth:64,textAlign:'right',whiteSpace:'nowrap'}}>{p!=null?`S/ ${p.toFixed(2)}`:'sin precio'}</span>
                 </div>
               </div>
             );
@@ -240,11 +243,11 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
           <div style={{marginTop:8,padding:'10px 13px',background:'var(--bg-accent)',borderRadius:8,border:'.5px solid var(--border-accent)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <span style={{fontSize:13,fontWeight:500,color:'var(--text-primary)'}}>Total ({svgs} porción{svgs!==1?'es':''})</span>
-              <span style={{fontSize:14,fontWeight:500,color:'var(--text-accent)'}}>S/. {total.toFixed(2)}</span>
+              <span style={{fontSize:14,fontWeight:500,color:'var(--text-accent)'}}>S/ {total.toFixed(2)}</span>
             </div>
             <div style={{display:'flex',justifyContent:'space-between',marginTop:3}}>
               <span style={{fontSize:11,color:'var(--text-muted)'}}>{(recipe.ingredientes||[]).length-ingsConPrecio.length>0?`${(recipe.ingredientes||[]).length-ingsConPrecio.length} sin precio`:'todos incluidos'}</span>
-              <span style={{fontSize:11,color:'var(--text-muted)'}}>S/. {(total/svgs).toFixed(2)} por porción</span>
+              <span style={{fontSize:11,color:'var(--text-muted)'}}>S/ {(total/svgs).toFixed(2)} por porción</span>
             </div>
           </div>
         )}
@@ -268,11 +271,11 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
       {recipe.notas&&<Sec title="Notas"><div style={{padding:'12px 14px',borderLeft:'3px solid var(--border-accent)',fontSize:13,color:'var(--text-secondary)',lineHeight:1.7,whiteSpace:'pre-wrap'}}>{recipe.notas}</div></Sec>}
 
       {(recipe.errores||[]).length>0&&(
-        <Sec title="Errores aprendidos">
+        <Sec title="Errores registrados">
           <div style={{display:'grid',gap:5}}>
             {recipe.errores.map((e,i)=>(
-              <div key={i} style={{display:'flex',gap:8,padding:'9px 12px',background:'var(--bg-danger)',borderRadius:8,fontSize:13,color:'var(--text-danger)',alignItems:'flex-start'}}>
-                <i className="ti ti-x" style={{flexShrink:0,marginTop:1}}/>{e}
+              <div key={i} style={{display:'flex',gap:8,padding:'9px 12px',background:'var(--bg-warning)',borderRadius:8,fontSize:13,color:'var(--text-warning)',alignItems:'flex-start'}}>
+                <i className="ti ti-notes" style={{flexShrink:0,marginTop:1}}/>{e}
               </div>
             ))}
           </div>
@@ -284,24 +287,35 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
 
 // ── CookMode ──────────────────────────────────────────────────────────────
 function CookMode({recipe,onExit}){
-  const[step,setStep]=useState(0);const total=(recipe.pasos||[]).length;const cur=recipe.pasos[step];
+  const[step,setStep]=useState(0);
+  const pasos=recipe.pasos||[];
+  const total=pasos.length;
+  if(total===0){
+    return(
+      <div style={{background:'#111',borderRadius:12,minHeight:320,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:14}}>
+        <span style={{fontSize:14,color:'#aaa'}}>Esta receta no tiene pasos.</span>
+        <button onClick={onExit} style={{...S.acct,fontSize:13}}>Volver</button>
+      </div>
+    );
+  }
+  const cur=pasos[step];
   return(
     <div style={{background:'#111',borderRadius:12,minHeight:520,display:'flex',flexDirection:'column'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'14px 18px',borderBottom:'.5px solid #2a2a2a'}}>
-        <span style={{fontSize:13,color:'#666',fontFamily:'var(--font-voice)'}}>{recipe.nombre}</span>
+        <span style={{fontSize:13,color:'#888',fontFamily:'var(--font-voice)'}}>{recipe.nombre}</span>
         <div style={{display:'flex',alignItems:'center',gap:14}}>
-          <div style={{display:'flex',gap:5}}>{recipe.pasos.map((_,i)=><div key={i} onClick={()=>setStep(i)} style={{width:7,height:7,borderRadius:99,cursor:'pointer',background:i===step?'#4a9eff':i<step?'#4a9eff55':'#333'}}/>)}</div>
-          <button onClick={onExit} style={{fontSize:12,color:'#666',borderColor:'#333',padding:'4px 10px',background:'transparent'}}><i className="ti ti-x" style={{marginRight:3,fontSize:12}}/>Salir</button>
+          <div style={{display:'flex',gap:5}}>{pasos.map((_,i)=><div key={i} onClick={()=>setStep(i)} style={{width:7,height:7,borderRadius:99,cursor:'pointer',background:i===step?'#4a9eff':i<step?'#4a9eff55':'#333'}}/>)}</div>
+          <button onClick={onExit} style={{fontSize:12,color:'#888',borderColor:'#333',padding:'4px 10px',background:'transparent'}}><i className="ti ti-x" style={{marginRight:3,fontSize:12}}/>Salir</button>
         </div>
       </div>
       <div style={{flex:1,padding:'28px 24px',display:'flex',flexDirection:'column',maxWidth:600,margin:'0 auto',width:'100%'}}>
         <div style={{fontSize:52,fontWeight:500,fontFamily:'var(--font-voice)',color:'#2a2a2a',lineHeight:1,marginBottom:4,userSelect:'none'}}>{String(step+1).padStart(2,'0')}</div>
         <div style={{fontSize:19,fontWeight:500,color:'#fff',fontFamily:'var(--font-voice)',marginBottom:14,lineHeight:1.3}}>{cur.titulo||`Paso ${step+1}`}</div>
-        <div style={{fontSize:15,color:'#aaa',lineHeight:1.75,flex:1}}>{cur.descripcion}</div>
+        <div style={{fontSize:15,color:'#bbb',lineHeight:1.75,flex:1}}>{cur.descripcion}</div>
         {cur.timer&&<Timer key={`cook-${step}`} secs={Number(cur.timer)} big/>}
         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:24}}>
-          <button disabled={step===0} onClick={()=>setStep(s=>s-1)} style={{color:'#777',borderColor:'#333',background:'transparent',fontSize:13,opacity:step===0?.25:1}}><i className="ti ti-arrow-left" style={{marginRight:4}}/>Anterior</button>
-          <span style={{fontSize:12,color:'#444'}}>Paso {step+1} de {total}</span>
+          <button disabled={step===0} onClick={()=>setStep(s=>s-1)} style={{color:'#999',borderColor:'#333',background:'transparent',fontSize:13,opacity:step===0?.25:1}}><i className="ti ti-arrow-left" style={{marginRight:4}}/>Anterior</button>
+          <span style={{fontSize:12,color:'#777'}}>Paso {step+1} de {total}</span>
           {step<total-1
             ?<button onClick={()=>setStep(s=>s+1)} style={{...S.acct,fontSize:13}}>Siguiente<i className="ti ti-arrow-right" style={{marginLeft:4}}/></button>
             :<button onClick={onExit} style={{...S.success,fontSize:13}}><i className="ti ti-check" style={{marginRight:4}}/>Completado</button>}
@@ -324,9 +338,14 @@ function RecipeForm({initial,carpetas,onSave,onCancel}){
 
   async function save(){
     if(!f.nombre.trim()){alert('La receta necesita un nombre');return}
+    if(!(Number(f.porciones_base)>=1)){alert('Las porciones deben ser 1 o más');return}
+    const ingsOk=ings.filter(i=>i.nombre.trim());
+    if(ingsOk.some(i=>(i.cantidad!==''&&i.cantidad!=null&&Number(i.cantidad)<0)||(i.precio!==''&&i.precio!=null&&Number(i.precio)<0))){
+      alert('Cantidades y precios no pueden ser negativos');return;
+    }
     setSaving(true);
     const data={...f,porciones_base:Number(f.porciones_base)||4,carpeta_id:f.carpeta_id||null,
-      ingredientes:ings.filter(i=>i.nombre.trim()).map(i=>({nombre:i.nombre,cantidad:i.cantidad!==''&&i.cantidad!=null?Number(i.cantidad):null,unidad:i.unidad||null,precio:i.precio!==''&&i.precio!=null?Number(i.precio):null})),
+      ingredientes:ingsOk.map(i=>({nombre:i.nombre.trim(),cantidad:i.cantidad!==''&&i.cantidad!=null?Number(i.cantidad):null,unidad:i.unidad||null,precio:i.precio!==''&&i.precio!=null?Number(i.precio):null})),
       pasos:pasos.filter(p=>p.descripcion.trim()).map(p=>({titulo:p.titulo||null,descripcion:p.descripcion,timer:p.timer?Number(p.timer):null})),
       errores};
     await onSave(data);
@@ -362,15 +381,15 @@ function RecipeForm({initial,carpetas,onSave,onCancel}){
       <div style={{marginBottom:14}}>
         <label style={S.lbl}>Ingredientes</label>
         <div style={{display:'grid',gridTemplateColumns:'1fr 75px 55px 70px 28px',gap:4,marginBottom:4}}>
-          {['Nombre','g/ml','Unidad','S/.',''].map((h,i)=><span key={i} style={{fontSize:10,color:'var(--text-muted)',padding:'0 2px'}}>{h}</span>)}
+          {['Nombre','Cantidad','Unidad','S/',''].map((h,i)=><span key={i} style={{fontSize:10,color:'var(--text-muted)',padding:'0 2px'}}>{h}</span>)}
         </div>
         {ings.map(ing=>(
           <div key={ing._id} style={{display:'grid',gridTemplateColumns:'1fr 75px 55px 70px 28px',gap:4,marginBottom:5}}>
             <input style={S.inp} placeholder="Nombre" value={ing.nombre} onChange={e=>updI(ing._id,'nombre',e.target.value)}/>
-            <input style={S.inp} type="number" placeholder="0" value={ing.cantidad} onChange={e=>updI(ing._id,'cantidad',e.target.value)}/>
+            <input style={S.inp} type="number" min="0" placeholder="0" value={ing.cantidad} onChange={e=>updI(ing._id,'cantidad',e.target.value)}/>
             <input style={S.inp} placeholder="g/ml" value={ing.unidad||''} onChange={e=>updI(ing._id,'unidad',e.target.value)}/>
-            <input style={S.inp} type="number" step="0.01" placeholder="0.00" value={ing.precio??''} onChange={e=>updI(ing._id,'precio',e.target.value)}/>
-            <button onClick={()=>setIngs(a=>a.filter(x=>x._id!==ing._id))} style={{padding:0,width:28,height:28,color:'var(--text-muted)'}}><i className="ti ti-x" style={{fontSize:13}}/></button>
+            <input style={S.inp} type="number" min="0" step="0.01" placeholder="0.00" value={ing.precio??''} onChange={e=>updI(ing._id,'precio',e.target.value)}/>
+            <button onClick={()=>setIngs(a=>a.filter(x=>x._id!==ing._id))} style={{padding:0,width:28,height:28,color:'var(--text-muted)'}} title="Quitar ingrediente"><i className="ti ti-x" style={{fontSize:13}}/></button>
           </div>
         ))}
         <button onClick={()=>setIngs(a=>[...a,{_id:uid(),nombre:'',cantidad:'',unidad:'',precio:''}])} style={{width:'100%',borderStyle:'dashed',fontSize:12,color:'var(--text-muted)',marginTop:2}}><i className="ti ti-plus" style={{marginRight:4}}/>Ingrediente</button>
@@ -382,11 +401,11 @@ function RecipeForm({initial,carpetas,onSave,onCancel}){
           <div key={p._id} style={{display:'flex',gap:8,marginBottom:10,alignItems:'flex-start'}}>
             <div style={{...S.num,marginTop:6}}>{i+1}</div>
             <div style={{flex:1,display:'grid',gap:4}}>
-              <input style={S.inp} placeholder="Título del paso" value={p.titulo} onChange={e=>updP(p._id,'titulo',e.target.value)}/>
+              <input style={S.inp} placeholder="Título del paso" value={p.titulo||''} onChange={e=>updP(p._id,'titulo',e.target.value)}/>
               <textarea style={ta} placeholder="Descripción..." value={p.descripcion} onChange={e=>updP(p._id,'descripcion',e.target.value)}/>
-              <input style={S.inp} type="number" placeholder="Timer en segundos (ej: 14400 = 4h)" value={p.timer} onChange={e=>updP(p._id,'timer',e.target.value)}/>
+              <input style={S.inp} type="number" min="0" placeholder="Timer en segundos (ej: 14400 = 4h)" value={p.timer} onChange={e=>updP(p._id,'timer',e.target.value)}/>
             </div>
-            <button onClick={()=>setPasos(a=>a.filter(x=>x._id!==p._id))} style={{padding:0,width:28,height:28,color:'var(--text-muted)',marginTop:4,flexShrink:0}}><i className="ti ti-x" style={{fontSize:13}}/></button>
+            <button onClick={()=>setPasos(a=>a.filter(x=>x._id!==p._id))} style={{padding:0,width:28,height:28,color:'var(--text-muted)',marginTop:4,flexShrink:0}} title="Quitar paso"><i className="ti ti-x" style={{fontSize:13}}/></button>
           </div>
         ))}
         <button onClick={()=>setPasos(a=>[...a,{_id:uid(),titulo:'',descripcion:'',timer:''}])} style={{width:'100%',borderStyle:'dashed',fontSize:12,color:'var(--text-muted)',marginTop:2}}><i className="ti ti-plus" style={{marginRight:4}}/>Paso</button>
@@ -395,11 +414,11 @@ function RecipeForm({initial,carpetas,onSave,onCancel}){
       <div style={{marginBottom:14}}><label style={S.lbl}>Notas</label><textarea style={{...S.inp,minHeight:70,resize:'vertical'}} value={f.notas} onChange={e=>setF(p=>({...p,notas:e.target.value}))} placeholder="Tips, ajuste de altitud..."/></div>
 
       <div style={{marginBottom:18}}>
-        <label style={S.lbl}>Errores aprendidos</label>
+        <label style={S.lbl}>Errores registrados</label>
         {errores.map((e,i)=>(
           <div key={i} style={{display:'flex',gap:6,marginBottom:5,alignItems:'center'}}>
-            <div style={{flex:1,fontSize:13,padding:'7px 11px',background:'var(--bg-danger)',color:'var(--text-danger)',borderRadius:8}}>{e}</div>
-            <button onClick={()=>setErrores(a=>a.filter((_,j)=>j!==i))} style={{padding:0,width:26,height:26,color:'var(--text-muted)'}}><i className="ti ti-x" style={{fontSize:12}}/></button>
+            <div style={{flex:1,fontSize:13,padding:'7px 11px',background:'var(--bg-warning)',color:'var(--text-warning)',borderRadius:8}}>{e}</div>
+            <button onClick={()=>setErrores(a=>a.filter((_,j)=>j!==i))} style={{padding:0,width:26,height:26,color:'var(--text-muted)'}} title="Quitar error"><i className="ti ti-x" style={{fontSize:12}}/></button>
           </div>
         ))}
         <div style={{display:'flex',gap:5}}>
@@ -420,7 +439,7 @@ function RecipeForm({initial,carpetas,onSave,onCancel}){
 const COLORS=['#4a9eff','#e74c3c','#2ecc71','#f39c12','#9b59b6','#1abc9c','#e67e22','#e91e63'];
 function CarpetasManager({carpetas,onSave,onDelete,onClose}){
   const[nombre,setNombre]=useState('');const[color,setColor]=useState(COLORS[0]);const[saving,setSaving]=useState(false);
-  async function add(){if(!nombre.trim())return;setSaving(true);await onSave({nombre,color});setNombre('');setSaving(false)}
+  async function add(){if(!nombre.trim())return;setSaving(true);await onSave({nombre:nombre.trim(),color});setNombre('');setSaving(false)}
   return(
     <div>
       <button onClick={onClose} style={S.back}><i className="ti ti-arrow-left"/>Recetario</button>
@@ -430,7 +449,7 @@ function CarpetasManager({carpetas,onSave,onDelete,onClose}){
           <div key={c.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',background:'var(--surface-2)',borderRadius:10,border:'.5px solid var(--border)'}}>
             <div style={{width:12,height:12,borderRadius:99,background:c.color,flexShrink:0}}/>
             <span style={{flex:1,fontSize:14,color:'var(--text-primary)'}}>{c.nombre}</span>
-            <button onClick={()=>onDelete(c.id)} style={{padding:0,width:26,height:26,color:'var(--text-muted)'}}><i className="ti ti-trash" style={{fontSize:13}}/></button>
+            <button onClick={()=>onDelete(c.id)} style={{padding:0,width:26,height:26,color:'var(--text-muted)'}} title="Eliminar carpeta"><i className="ti ti-trash" style={{fontSize:13}}/></button>
           </div>
         ))}
         {carpetas.length===0&&<p style={{fontSize:13,color:'var(--text-muted)'}}>Sin carpetas aún.</p>}
@@ -451,13 +470,19 @@ function CarpetasManager({carpetas,onSave,onDelete,onClose}){
 function ImportView({onImport,onCancel}){
   const[json,setJson]=useState('');const[err,setErr]=useState('');const[loading,setLoading]=useState(false);
   async function doImport(){
+    let arr;
     try{
       const p=JSON.parse(json);
-      const arr=Array.isArray(p)?p:[p];
-      if(!arr.every(r=>r.nombre)){setErr('Cada receta debe tener "nombre".');return}
-      setLoading(true);
+      arr=Array.isArray(p)?p:[p];
+    }catch(e){setErr('JSON inválido. Revisa el formato.');return}
+    if(arr.length===0||!arr.every(r=>r&&r.nombre)){setErr('Cada receta debe tener "nombre".');return}
+    setLoading(true);
+    try{
       await onImport(arr);
-    }catch(e){setErr('JSON inválido. Revisa el formato.');setLoading(false)}
+    }catch(e){
+      setErr('No se pudo importar: '+e.message);
+      setLoading(false);
+    }
   }
   return(
     <div>
@@ -477,10 +502,9 @@ function ImportView({onImport,onCancel}){
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
-function Toast({msg}){
-  return <div style={{textAlign:'center',padding:'8px 16px',background:'var(--fill-accent)',color:'var(--on-accent)',borderRadius:'var(--radius)',fontSize:13,fontWeight:500,marginBottom:12}}>{msg}</div>;
+function Toast({msg,err}){
+  return <div style={{textAlign:'center',padding:'8px 16px',background:err?'var(--text-danger)':'var(--fill-accent)',color:'var(--on-accent)',borderRadius:'var(--radius)',fontSize:13,fontWeight:500,marginBottom:12}}>{msg}</div>;
 }
-
 
 // ── CostosSection ─────────────────────────────────────────────────────────
 function CostosSection(){
@@ -488,16 +512,17 @@ function CostosSection(){
   const[ready,setReady]=useState(false);
   const[search,setSearch]=useState('');
   const[catFiltro,setCatFiltro]=useState('all');
-  const[editing,setEditing]=useState(null); // null=list, 'new'=form nuevo, {id}=form editar
+  const[editing,setEditing]=useState(null);
   const[form,setForm]=useState({nombre:'',precio:'',unidad:'',categoria:'Lácteos',notas:''});
   const[saving,setSaving]=useState(false);
   const[toast,setToast]=useState(null);
 
-  const notify=msg=>{setToast(msg);setTimeout(()=>setToast(null),2000)};
+  const notify=(msg,err=false)=>{setToast({msg,err});setTimeout(()=>setToast(null),2500)};
 
   async function load(){
-    try{const d=await getAll('precios');setPrecios(d);setReady(true);}
-    catch{setReady(true);}
+    try{const d=await getAll('precios');setPrecios(d);}
+    catch(e){notify('No se pudieron cargar los precios: '+e.message,true);}
+    setReady(true);
   }
   useEffect(()=>{load()},[]);
 
@@ -505,17 +530,25 @@ function CostosSection(){
   function openEdit(p){setForm({nombre:p.nombre,precio:p.precio,unidad:p.unidad,categoria:p.categoria,notas:p.notas||''});setEditing(p)}
 
   async function save(){
-    if(!form.nombre.trim()||!form.precio||!form.unidad.trim()){alert('Nombre, precio y unidad son obligatorios');return}
+    if(!form.nombre.trim()||form.precio===''||!form.unidad.trim()){alert('Nombre, precio y unidad son obligatorios');return}
+    if(!(Number(form.precio)>=0)){alert('El precio debe ser un número igual o mayor que 0');return}
     setSaving(true);
     const data={nombre:form.nombre.trim(),precio:Number(form.precio),unidad:form.unidad.trim(),categoria:form.categoria,notas:form.notas.trim()||null};
-    if(editing==='new') await post('precios',data);
-    else await put('precios',editing.id,data);
-    await load();setSaving(false);setEditing(null);notify(editing==='new'?'Precio agregado':'Precio actualizado');
+    const nuevo=editing==='new';
+    try{
+      if(nuevo) await post('precios',data);
+      else await put('precios',editing.id,data);
+      await load();setEditing(null);notify(nuevo?'Precio agregado':'Precio actualizado');
+    }catch(e){
+      notify('No se guardó: '+e.message,true);
+    }
+    setSaving(false);
   }
 
   async function remove(id){
     if(!confirm('¿Eliminar este precio?'))return;
-    await del('precios',id);await load();notify('Eliminado');
+    try{await del('precios',id);await load();notify('Eliminado');}
+    catch(e){notify('No se eliminó: '+e.message,true);}
   }
 
   const filtered=precios.filter(p=>{
@@ -530,18 +563,19 @@ function CostosSection(){
     return acc;
   },{});
   const sinCat=filtered.filter(p=>!CATEGORIAS.includes(p.categoria));
-  if(sinCat.length>0)grouped['Otros']=sinCat;
+  if(sinCat.length>0)grouped['Otros']=[...(grouped['Otros']||[]),...sinCat];
 
   if(!ready)return <div style={{padding:40,textAlign:'center',color:'var(--text-muted)',fontSize:14}}>Cargando...</div>;
 
   if(editing){
     return(
       <div>
+        {toast&&<Toast msg={toast.msg} err={toast.err}/>}
         <button onClick={()=>setEditing(null)} style={S.back}><i className="ti ti-arrow-left"/>Costos</button>
         <h2 style={{fontSize:18,fontWeight:500,fontFamily:'var(--font-voice)',color:'var(--text-primary)',marginBottom:18}}>{editing==='new'?'Nuevo precio':'Editar precio'}</h2>
         <div style={{marginBottom:12}}><label style={S.lbl}>Nombre</label><input style={S.inp} value={form.nombre} onChange={e=>setForm(p=>({...p,nombre:e.target.value}))} placeholder="Leche evaporada..."/></div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginBottom:12}}>
-          <div><label style={S.lbl}>Precio S/.</label><input style={S.inp} type="number" step="0.01" value={form.precio} onChange={e=>setForm(p=>({...p,precio:e.target.value}))} placeholder="4.00"/></div>
+          <div><label style={S.lbl}>Precio S/</label><input style={S.inp} type="number" min="0" step="0.01" value={form.precio} onChange={e=>setForm(p=>({...p,precio:e.target.value}))} placeholder="4.00"/></div>
           <div><label style={S.lbl}>Unidad</label><input style={S.inp} value={form.unidad} onChange={e=>setForm(p=>({...p,unidad:e.target.value}))} placeholder="lata (400g), kg, L..."/></div>
         </div>
         <div style={{marginBottom:12}}>
@@ -561,7 +595,7 @@ function CostosSection(){
 
   return(
     <div>
-      {toast&&<div style={{textAlign:'center',padding:'8px 16px',background:'var(--fill-accent)',color:'var(--on-accent)',borderRadius:'var(--radius)',fontSize:13,fontWeight:500,marginBottom:12}}>{toast}</div>}
+      {toast&&<Toast msg={toast.msg} err={toast.err}/>}
       <div style={{display:'flex',gap:6,marginBottom:10}}>
         <div style={{flex:1,position:'relative'}}>
           <i className="ti ti-search" style={{position:'absolute',left:9,top:'50%',transform:'translateY(-50%)',fontSize:13,color:'var(--text-muted)',pointerEvents:'none'}}/>
@@ -580,7 +614,7 @@ function CostosSection(){
       {Object.keys(grouped).length===0?(
         <div style={{textAlign:'center',padding:'48px 20px',color:'var(--text-muted)'}}>
           <i className="ti ti-tag" style={{fontSize:36,display:'block',marginBottom:10}}/>
-          <p style={{fontSize:14,color:'var(--text-secondary)'}}>{search?'Sin resultados':'Agrega tu primer precio de referencia'}</p>
+          <p style={{fontSize:14,color:'var(--text-secondary)'}}>{search?'Sin resultados para esa búsqueda':catFiltro!=='all'?'No hay precios en esta categoría':'Agrega tu primer precio de referencia'}</p>
         </div>
       ):(
         Object.entries(grouped).map(([cat,items])=>(
@@ -594,12 +628,12 @@ function CostosSection(){
                     {p.notas&&<div style={{fontSize:11,color:'var(--text-muted)',marginTop:2}}>{p.notas}</div>}
                   </div>
                   <div style={{textAlign:'right',flexShrink:0}}>
-                    <div style={{fontSize:14,fontWeight:500,color:'var(--text-accent)'}}>S/. {Number(p.precio).toFixed(2)}</div>
+                    <div style={{fontSize:14,fontWeight:500,color:'var(--text-accent)'}}>S/ {Number(p.precio).toFixed(2)}</div>
                     <div style={{fontSize:11,color:'var(--text-muted)'}}>{p.unidad}</div>
                   </div>
-                  <div style={{display:'flex',gap:4,flexShrink:0}}>
-                    <button onClick={()=>openEdit(p)} style={{padding:0,width:26,height:26,color:'var(--text-muted)'}}><i className="ti ti-edit" style={{fontSize:12}}/></button>
-                    <button onClick={()=>remove(p.id)} style={{padding:0,width:26,height:26,color:'var(--text-danger)'}}><i className="ti ti-trash" style={{fontSize:12}}/></button>
+                  <div style={{display:'flex',gap:16,flexShrink:0,marginLeft:6}}>
+                    <button onClick={()=>openEdit(p)} style={{padding:0,width:28,height:28,justifyContent:'center',color:'var(--text-muted)'}} title="Editar"><i className="ti ti-edit" style={{fontSize:13}}/></button>
+                    <button onClick={()=>remove(p.id)} style={{padding:0,width:28,height:28,justifyContent:'center',color:'var(--text-danger)'}} title="Eliminar"><i className="ti ti-trash" style={{fontSize:13}}/></button>
                   </div>
                 </div>
               ))}
@@ -608,7 +642,7 @@ function CostosSection(){
         ))
       )}
       <div style={{marginTop:8,padding:'10px 13px',background:'var(--surface-1)',borderRadius:8,fontSize:12,color:'var(--text-muted)'}}>
-        {precios.length} precios guardados · Última actualización: {precios.length>0?new Date(precios.reduce((a,b)=>a.actualizado>b.actualizado?a:b).actualizado).toLocaleDateString('es-PE'):'—'}
+        {precios.length} precios guardados{precios.length>0&&precios.some(p=>p.actualizado)?` · Última actualización: ${new Date(precios.reduce((a,b)=>(a.actualizado||'')>(b.actualizado||'')?a:b).actualizado).toLocaleDateString('es-PE')}`:''}
       </div>
     </div>
   );
@@ -616,22 +650,20 @@ function CostosSection(){
 
 // ── App ───────────────────────────────────────────────────────────────────
 function App(){
-  const[state,setState]=useState({recipes:[],carpetas:[]});
+  const[state,setState]=useState({recetas:[],carpetas:[]});
   const[ready,setReady]=useState(false);
   const[view,setView]=useState('list');
   const[selId,setSelId]=useState(null);
   const[selRecipe,setSelRecipe]=useState(null);
   const[toast,setToast]=useState(null);
   const[error,setError]=useState(null);
-  const[apiError,setApiError]=useState(null);
   const[seccion,setSeccion]=useState('recetario');
 
-  const notify=msg=>{setToast(msg);setTimeout(()=>setToast(null),2500)};
+  const notify=(msg,err=false)=>{setToast({msg,err});setTimeout(()=>setToast(null),2500)};
 
   async function reload(){
     try{
       const data=await get('state');
-      if(data.error) throw new Error(data.error);
       setState({recetas:data.recetas||[],carpetas:data.carpetas||[]});
       setError(null);
     }catch(e){
@@ -643,47 +675,67 @@ function App(){
   useEffect(()=>{reload()},[]);
 
   async function loadRecipe(id){
-    const r=await get('receta',id);
-    setSelRecipe(r);
-    setSelId(id);
-    setView('detail');
+    try{
+      const r=await get('receta',id);
+      setSelRecipe(r);
+      setSelId(id);
+      setView('detail');
+    }catch(e){
+      notify('No se pudo abrir la receta: '+e.message,true);
+    }
   }
 
   async function saveRecipe(data){
-    let res;
-    if(selId&&view==='form'&&selRecipe){
-      res=await put('recetas',selId,data);
-      setSelRecipe(res.receta);
-    } else {
-      res=await post('recetas',data);
-      setSelId(res.id);
-      setSelRecipe(res.receta);
+    try{
+      let res;
+      if(selId&&view==='form'&&selRecipe){
+        res=await put('recetas',selId,data);
+        setSelRecipe(res.receta);
+      } else {
+        res=await post('recetas',data);
+        setSelId(res.id);
+        setSelRecipe(res.receta);
+      }
+      await reload();
+      setView('detail');
+      notify('Receta guardada');
+    }catch(e){
+      notify('No se guardó la receta: '+e.message,true);
     }
-    await reload();
-    setView('detail');
-    notify('Receta guardada');
   }
 
   async function deleteRecipe(){
     if(!confirm('¿Eliminar esta receta?'))return;
-    await del('recetas',selId);
-    await reload();
-    setView('list');
-    setSelId(null);setSelRecipe(null);
-    notify('Receta eliminada');
+    try{
+      await del('recetas',selId);
+      await reload();
+      setView('list');
+      setSelId(null);setSelRecipe(null);
+      notify('Receta eliminada');
+    }catch(e){
+      notify('No se eliminó la receta: '+e.message,true);
+    }
   }
 
   async function saveCarpeta(data){
-    await post('carpetas',data);
-    await reload();
-    notify('Carpeta creada');
+    try{
+      await post('carpetas',data);
+      await reload();
+      notify('Carpeta creada');
+    }catch(e){
+      notify('No se creó la carpeta: '+e.message,true);
+    }
   }
 
   async function deleteCarpeta(id){
     if(!confirm('¿Eliminar carpeta? Las recetas quedan sin carpeta.'))return;
-    await del('carpetas',id);
-    await reload();
-    notify('Carpeta eliminada');
+    try{
+      await del('carpetas',id);
+      await reload();
+      notify('Carpeta eliminada');
+    }catch(e){
+      notify('No se eliminó la carpeta: '+e.message,true);
+    }
   }
 
   async function importRecipes(arr){
@@ -701,9 +753,9 @@ function App(){
         <div style={{fontSize:13,color:'var(--text-danger)',lineHeight:1.5,marginBottom:12}}>{error}</div>
         <div style={{fontSize:12,color:'var(--text-muted)',lineHeight:1.6}}>
           Verifica que:<br/>
-          1. <code>api_recetario.php</code> está en <code>php/src/</code><br/>
-          2. La base de datos <code>recetario</code> existe en MySQL<br/>
-          3. Las tablas fueron creadas con <code>init_recetario.sql</code>
+          1. La API responde en <code>/recetario/api.php</code> (archivos en <code>php/src/recetario/</code>)<br/>
+          2. La base de datos <code>recetario</code> existe y coincide con <code>MYSQL_DATABASE</code> del <code>.env</code><br/>
+          3. Las tablas existen: se crean con <code>mysql/init_recetario.sql</code> solo en el primer arranque, con el volumen vacío
         </div>
         <button onClick={reload} style={{marginTop:12,...S.acct}}>Reintentar</button>
       </div>
@@ -712,7 +764,7 @@ function App(){
 
   return(
     <div style={S.page}>
-      {toast&&<Toast msg={toast}/>}
+      {toast&&<Toast msg={toast.msg} err={toast.err}/>}
       {view!=='cook'&&(
         <div style={S.hdr}>
           <span onClick={()=>{setView('list');setSeccion('recetario')}} style={{fontFamily:'var(--font-voice)',fontSize:17,fontWeight:500,color:'var(--text-primary)',cursor:'pointer'}}>Recetario</span>
@@ -729,7 +781,7 @@ function App(){
 
       {seccion==='recetario'&&view==='form'&&<RecipeForm initial={selId?selRecipe:null} carpetas={state.carpetas} onSave={saveRecipe} onCancel={()=>setView(selId?'detail':'list')}/>}
 
-      {(seccion==='recetario'||view==='cook')&&view==='cook'&&selRecipe&&<CookMode recipe={selRecipe} onExit={()=>setView('detail')}/>}
+      {seccion==='recetario'&&view==='cook'&&selRecipe&&<CookMode recipe={selRecipe} onExit={()=>setView('detail')}/>}
 
       {seccion==='recetario'&&view==='import'&&<ImportView onImport={importRecipes} onCancel={()=>setView('list')}/>}
 
