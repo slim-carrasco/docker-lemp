@@ -40,7 +40,7 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
 // ── Config ────────────────────────────────────────────────────────────────
-const API = '/api_recetario.php';
+const API = '/recetario/api.php';
 const get  = (entity, id) => fetch(`${API}?entity=${entity}${id ? '&id='+id : ''}`).then(r=>r.json());
 const getAll = (entity) => fetch(`${API}?entity=${entity}`).then(r=>r.json());
 const post = (entity, body) => fetch(`${API}?entity=${entity}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
