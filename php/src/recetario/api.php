@@ -19,6 +19,7 @@ $rutas = [
     'carpetas' => 'carpetas',
     'precios'  => 'precios',
     'import'   => 'import',
+    'export'   => 'export',
 ];
 
 if (!isset($rutas[$entity])) {

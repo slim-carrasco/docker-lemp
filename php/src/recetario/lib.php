@@ -29,6 +29,19 @@ function transaccion(PDO $pdo, callable $fn) {
     }
 }
 
+// Resuelve la carpeta por id o, si viene el nombre, la busca o la crea
+function resolverCarpeta(PDO $pdo, array $r): ?int {
+    if (!empty($r['carpeta_id'])) return (int)$r['carpeta_id'];
+    $nombre = trim((string)($r['carpeta'] ?? ''));
+    if ($nombre === '') return null;
+    $st = $pdo->prepare("SELECT id FROM carpetas WHERE nombre = ?");
+    $st->execute([$nombre]);
+    $id = $st->fetchColumn();
+    if ($id) return (int)$id;
+    $pdo->prepare("INSERT INTO carpetas (nombre) VALUES (?)")->execute([$nombre]);
+    return (int)$pdo->lastInsertId();
+}
+
 function guardarHijos(PDO $pdo, int $rid, array $r): void {
     $stIng = $pdo->prepare(
         "INSERT INTO ingredientes (receta_id, orden, nombre, cantidad, unidad, precio)
@@ -68,7 +81,7 @@ function insertReceta(PDO $pdo, array $r): int {
         "INSERT INTO recetas (carpeta_id, nombre, descripcion, porciones_base, altitud, notas, fecha)
          VALUES (?, ?, ?, ?, ?, ?, ?)"
     )->execute([
-        ($r['carpeta_id'] ?? null) ?: null,
+        resolverCarpeta($pdo, $r),
         $r['nombre'],
         $r['descripcion'] ?? null,
         $r['porciones_base'] ?? 4,

@@ -65,6 +65,21 @@ const uid  = () => Math.random().toString(36).slice(2,9);
 const scl  = (v,base,cur) => { if(v==null) return null; const r=(v*cur)/base; return Number.isInteger(r)?r:parseFloat(r.toFixed(2)); };
 const fmt  = s => { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60; return h?`${h}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`; };
 
+// Descarga un archivo JSON (funciona en HTTP y HTTPS, a diferencia del portapapeles)
+function descargarJSON(nombreArchivo, data){
+  const blob = new Blob([JSON.stringify(data,null,2)],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = nombreArchivo;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// Búsqueda por ingredientes: sin tildes, sin mayúsculas, palabra completa (plural opcional)
+const norm = s => (s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const esc  = s => s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+const cumple = (txt,t) => new RegExp('(^|[^a-z])'+esc(t)+'(s|es)?([^a-z]|$)').test(norm(txt));
+
 // ── Categorías de precios
 const CATEGORIAS = ['Lácteos','Frutas','Secos','Otros'];
 
@@ -109,7 +124,17 @@ function CarpetaBadge({color,nombre}){
 // ── RecipeList ────────────────────────────────────────────────────────────
 function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
   const[search,setSearch]=useState('');
+  const[ingQ,setIngQ]=useState('');
   const[carpetaFiltro,setCarpetaFiltro]=useState('all');
+
+  const terms = ingQ.split(',').map(t=>norm(t).trim()).filter(Boolean);
+
+  async function exportAll(){
+    try{
+      const data=await getAll('export');
+      descargarJSON('recetario-'+new Date().toISOString().slice(0,10)+'.json', data);
+    }catch(e){alert('No se pudo exportar: '+e.message)}
+  }
 
   const filtered = recipes.filter(r=>{
     const q=search.toLowerCase().trim();
@@ -117,6 +142,7 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
       if(carpetaFiltro==='sin' && r.carpeta_id) return false;
       if(carpetaFiltro!=='sin' && String(r.carpeta_id)!==carpetaFiltro) return false;
     }
+    if(terms.length && !terms.every(t=>cumple(r.ingredientes_txt,t))) return false;
     if(!q) return true;
     return r.nombre.toLowerCase().includes(q);
   });
@@ -129,6 +155,7 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
           <input style={{...S.inp,paddingLeft:30}} placeholder="Buscar receta..." value={search} onChange={e=>setSearch(e.target.value)}/>
         </div>
       </div>
+      <input style={{...S.inp,marginBottom:10}} placeholder="Ingredientes que tengo: pollo, papa..." value={ingQ} onChange={e=>setIngQ(e.target.value)}/>
 
       <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
         {[{id:'all',nombre:'Todas',color:'#6b6560'},{id:'sin',nombre:'Sin carpeta',color:'#777'},...carpetas].map(c=>(
@@ -140,9 +167,10 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
         <button onClick={onManageCarpetas} style={{fontSize:11,padding:'4px 10px',borderRadius:99,color:'var(--text-muted)',borderStyle:'dashed'}}><i className="ti ti-folder-plus" style={{fontSize:11,marginRight:3}}/>Carpetas</button>
       </div>
 
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:8}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:8,flexWrap:'wrap'}}>
         <span style={{fontSize:13,color:'var(--text-muted)'}}>{filtered.length} receta{filtered.length!==1?'s':''}</span>
         <div style={{display:'flex',gap:6}}>
+          <button onClick={exportAll}><i className="ti ti-download" style={{marginRight:4}}/>Exportar todo</button>
           <button onClick={onImport}><i className="ti ti-upload" style={{marginRight:4}}/>Importar JSON</button>
           <button onClick={onNew} style={S.acct}><i className="ti ti-plus" style={{marginRight:4}}/>Nueva</button>
         </div>
@@ -151,7 +179,7 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
       {filtered.length===0?(
         <div style={{textAlign:'center',padding:'48px 20px',color:'var(--text-muted)'}}>
           <i className="ti ti-file-plus" style={{fontSize:36,display:'block',marginBottom:10}}/>
-          <p style={{fontSize:14,color:'var(--text-secondary)'}}>{search?'Sin resultados para esa búsqueda':carpetaFiltro!=='all'?'No hay recetas en esta carpeta':'Agrega tu primera receta o importa un JSON'}</p>
+          <p style={{fontSize:14,color:'var(--text-secondary)'}}>{(search||terms.length)?'Sin resultados para esa búsqueda':carpetaFiltro!=='all'?'No hay recetas en esta carpeta':'Agrega tu primera receta o importa un JSON'}</p>
         </div>
       ):(
         <div style={{display:'grid',gap:8}}>
@@ -184,14 +212,31 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
 // ── RecipeDetail ──────────────────────────────────────────────────────────
 function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
   const[svgs,setSvgs]=useState(recipe.porciones_base||4);
-  const[copied,setCopied]=useState(false);
+  const[copied,setCopied]=useState('');
   const carpeta=carpetas.find(c=>c.id==recipe.carpeta_id);
 
+  // Mismo formato que "Exportar todo": sin ids, con el nombre de la carpeta
   function copyJSON(){
-    const exp={...recipe};delete exp.id;delete exp.carpeta_nombre;delete exp.carpeta_color;delete exp.n_ingredientes;delete exp.n_pasos;delete exp.n_errores;
-    exp.ingredientes=(recipe.ingredientes||[]).map(i=>{const o={...i};delete o.id;delete o.receta_id;delete o.orden;return o});
-    exp.pasos=(recipe.pasos||[]).map(p=>{const o={...p};delete o.id;delete o.receta_id;delete o.orden;return o});
-    navigator.clipboard.writeText(JSON.stringify(exp,null,2)).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000)});
+    const exp={
+      nombre:recipe.nombre,
+      descripcion:recipe.descripcion,
+      carpeta:carpeta?carpeta.nombre:null,
+      porciones_base:recipe.porciones_base,
+      altitud:recipe.altitud,
+      notas:recipe.notas,
+      fecha:recipe.fecha,
+      ingredientes:(recipe.ingredientes||[]).map(i=>({nombre:i.nombre,cantidad:i.cantidad,unidad:i.unidad,precio:i.precio})),
+      pasos:(recipe.pasos||[]).map(p=>({titulo:p.titulo,descripcion:p.descripcion,timer:p.timer})),
+      errores:recipe.errores||[],
+    };
+    const text=JSON.stringify(exp,null,2);
+    const ok=(msg)=>{setCopied(msg);setTimeout(()=>setCopied(''),2000)};
+    if(navigator.clipboard&&window.isSecureContext){
+      navigator.clipboard.writeText(text).then(()=>ok('Copiado')).catch(()=>{descargarJSON(recipe.nombre+'.json',exp);ok('Descargado')});
+    }else{
+      descargarJSON(recipe.nombre+'.json',exp);
+      ok('Descargado');
+    }
   }
 
   const ingsConPrecio=(recipe.ingredientes||[]).filter(i=>i.precio!=null);
@@ -212,7 +257,7 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:22}}>
         <button onClick={onCook} style={S.acct}><i className="ti ti-chef-hat" style={{marginRight:4}}/>Modo cocina</button>
         <button onClick={onEdit}><i className="ti ti-edit" style={{marginRight:4}}/>Editar</button>
-        <button onClick={copyJSON}><i className={`ti ti-${copied?'check':'copy'}`} style={{marginRight:4}}/>{copied?'Copiado':'Copiar JSON'}</button>
+        <button onClick={copyJSON}><i className={`ti ti-${copied?'check':'copy'}`} style={{marginRight:4}}/>{copied||'Copiar JSON'}</button>
         <button onClick={onDelete} style={S.danger} title="Eliminar receta"><i className="ti ti-trash"/></button>
       </div>
 
