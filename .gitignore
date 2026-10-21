@@ -3,5 +3,5 @@
 docker-compose.override.yml
 mysql/data
 uploads/
-*.sql
 .DS_Store
+backups/

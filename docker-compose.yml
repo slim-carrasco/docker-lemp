@@ -30,6 +30,7 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
       - ./mysql/init_recetario.sql:/docker-entrypoint-initdb.d/init_recetario.sql:ro
+      - ./mysql/seed_recetario.sql:/docker-entrypoint-initdb.d/seed_recetario.sql:ro
     environment: 
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}

@@ -23,7 +23,7 @@ Aplicación web para guardar recetas con escalado de porciones, costos, modo coc
 | Nginx (alpine) | 1.29.4 | Servir archivos estáticos y pasar `.php` a PHP-FPM |
 | MySQL | 8.0.45 | Almacenar los datos |
 | PHP-FPM | 8.2 | Lógica del servidor y API |
-| React 18 | desde CDN | Interfaz (sin paso de compilación) |
+| React 18, Babel e �conos Tabler | locales en web/vendor | Interfaz (sin paso de compilación) |
 
 "Probado con" indica las versiones usadas durante el desarrollo, no un mínimo garantizado.
 
@@ -56,7 +56,6 @@ Aplicación web para guardar recetas con escalado de porciones, costos, modo coc
 ## Requisitos
 
 - Docker y Docker Compose.
-- Conexión a internet al abrir la app: React, Babel, fuentes e íconos se cargan desde CDN.
 
 ## Instalación
 
@@ -243,7 +242,7 @@ Deben aparecer `MYSQL_DATABASE`, `MYSQL_USER` y `MYSQL_PASSWORD`. Si no, revisa 
 
 ## Limitaciones conocidas
 
-- Necesita internet: React, Babel, fuentes e íconos vienen de CDN. Babel compila en el navegador en cada carga, lo que es más lento en celular.
+- Babel compila en el navegador en cada carga, lo que hace m�s lenta la priemera carga en celular.
 - La búsqueda por ingredientes compara palabras completas en texto libre: no reconoce sinónimos (palta/aguacate) ni distingue variantes.
 - Los precios de ingredientes no se enlazan con la pestaña Costos.
 - Los textos de la pestaña Costos y los nombres de ingredientes son texto libre, sin catálogo ni unidades normalizadas.
