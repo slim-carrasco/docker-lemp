@@ -8,6 +8,7 @@ Aplicación web para guardar recetas con escalado de porciones, costos, modo coc
 - Escalado de porciones: cantidades y costos se recalculan al cambiar las porciones.
 - Costo total y por porción en el detalle de cada receta.
 - Modo cocina: un paso a la vez, con temporizador por paso.
+- Ficha imprimible de cada receta (botón "Imprimir ficha") con las cantidades de las porciones elegidas; permite guardarla como PDF.
 - Búsqueda por nombre y por ingredientes que tienes (`pollo, papa` muestra las recetas que contienen ambos).
 - Carpetas con color para organizar recetas.
 - Pestaña Costos: precios de referencia por categoría.
