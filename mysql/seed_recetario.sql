@@ -68,6 +68,7 @@ UNLOCK TABLES;
 
 LOCK TABLES `precios` WRITE;
 /*!40000 ALTER TABLE `precios` DISABLE KEYS */;
+INSERT INTO `precios` VALUES (1,'Leche evaporada',4.00,'lata (400g)','Lácteos','Una lata rinde para 1 carlota','2026-08-20 00:58:40'),(2,'Leche condensada',4.00,'lata (397g)','Lácteos','Aprox S/ 1 por 100g','2026-08-20 00:58:40'),(3,'Queso crema comercial',12.00,'200g','Lácteos','Queso crema de marca comercial','2026-08-20 00:58:40'),(4,'Queso crema casero',4.00,'200g','Lácteos','Hecho en casa - vale la pena','2026-08-20 00:58:40'),(5,'Leche fresca de vaca',3.00,'1L','Lácteos','Directa del productor','2026-08-20 00:58:40'),(6,'Crema de leche',21.00,'1L','Lácteos','No vale la pena hacer en casa','2026-08-20 00:58:40'),(7,'Yogur griego casero',3.00,'400g','Lácteos','De 1L leche fresca - requiere termómetro','2026-08-20 00:58:40'),(8,'Mantequilla sin sal',10.50,'180g','Lácteos',NULL,'2026-08-20 00:58:40'),(9,'Mantequilla con sal',19.50,'390g','Lácteos',NULL,'2026-08-20 00:58:40'),(10,'Galletas María (tienda)',1.00,'60g','Secos','Opción más económica','2026-08-20 00:58:40'),(11,'Galletas María (supermercado)',3.50,'110g','Secos','Precio referencial','2026-08-20 00:58:40'),(12,'Azúcar blanca',0.20,'100g','Secos','Precio aproximado','2026-08-20 00:58:40'),(13,'Gelatina sin sabor',1.50,'sobre (10g)','Secos',NULL,'2026-08-20 00:58:40'),(14,'Harina de trigo',0.30,'100g','Secos',NULL,'2026-08-20 00:58:40'),(15,'Cocoa en polvo',0.50,'100g','Secos',NULL,'2026-08-20 00:58:40'),(16,'Esencia de vainilla',0.30,'5ml','Secos',NULL,'2026-08-20 00:58:40'),(17,'Limones',1.00,'10 unidades','Frutas','Aprox 10 unidades por sol','2026-08-20 00:58:40'),(18,'Maracuyá',0.50,'unidad','Frutas','Usar maduros con cáscara arrugada','2026-08-20 00:58:40'),(19,'Papaya',4.00,'1kg','Frutas','De 1kg se obtienen ~650g de pulpa limpia','2026-08-20 00:58:40'),(20,'Duraznos en almíbar',8.00,'lata (480g)','Frutas','También hay de S/ 10','2026-08-20 00:58:40'),(21,'Huevos',0.50,'unidad','Otros','Precio aproximado','2026-08-20 00:58:40'),(22,'Sal',0.05,'100g','Otros',NULL,'2026-08-20 00:58:40');
 /*!40000 ALTER TABLE `precios` ENABLE KEYS */;
 UNLOCK TABLES;
 
@@ -90,4 +91,4 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-10-21  4:45:06
+-- Dump completed on 2026-10-21  4:55:51
