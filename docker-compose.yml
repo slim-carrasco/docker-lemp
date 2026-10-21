@@ -4,6 +4,7 @@ services:
     image: nginx:1.29.4-alpine
     ports:
       - 80:80
+    restart: unless-stopped
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
       - ./web:/usr/share/nginx/html
@@ -50,6 +51,7 @@ services:
         VERSION: 8.2
     volumes:
       - ./php/src:/var/www/html
+    restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
