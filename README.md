@@ -1,6 +1,6 @@
-# Recetario — Stack LEMP con Docker Compose
+# Recetario - Stack LEMP con Docker Compose
 
-Aplicación web para guardar recetas con escalado de porciones, costos, modo cocina con temporizadores y búsqueda por ingredientes. Corre sobre un stack LEMP (Linux, Nginx, MySQL, PHP-FPM) en contenedores, con redes separadas.
+Aplicación web para guardar recetas con escalado de porciones, costos, modo cocina con temporizadores y búsqueda por ingredientes. Corre sobre un stack LEMP (Linux, Nginx, MySQL, PHP-FPM) en contenedores, con redes separadas. Funciona sin conexión a internet.
 
 ## Funciones
 
@@ -21,9 +21,9 @@ Aplicación web para guardar recetas con escalado de porciones, costos, modo coc
 | Docker | 29.2.1 | Contenerizar |
 | Docker Compose | 5.0.2 | Orquestar |
 | Nginx (alpine) | 1.29.4 | Servir archivos estáticos y pasar `.php` a PHP-FPM |
-| MySQL | 8.0.45 | Almacenar los datos |
-| PHP-FPM | 8.2 | Lógica del servidor y API |
-| React 18, Babel e �conos Tabler | locales en web/vendor | Interfaz (sin paso de compilación) |
+| MySQL | 8.0 (8.0.45) | Almacenar los datos |
+| PHP-FPM | 8.2 (8.2.34) | Lógica del servidor y API |
+| React 18, Babel, íconos Tabler | locales en `web/vendor/` | Interfaz, sin paso de compilación |
 
 "Probado con" indica las versiones usadas durante el desarrollo, no un mínimo garantizado.
 
@@ -31,31 +31,33 @@ Aplicación web para guardar recetas con escalado de porciones, costos, modo coc
 
 ```
 .
-├── docker-compose.yml
-├── .env.example
-├── nginx/
-│   └── nginx.conf
-├── mysql/
-│   ├── init_recetario.sql        # esquema (6 tablas), se ejecuta una sola vez
-│   └── seed_recetario.sql        # datos de ejemplo (opcional)
-├── php/
-│   ├── Dockerfile
-│   └── src/
-│       ├── health.php            # chequeo de salud
-│       ├── demo_db.php           # demo del stack (escribe en la base)
-│       └── recetario/
-│           ├── api.php           # router
-│           ├── db.php            # conexión PDO
-│           ├── lib.php           # funciones compartidas
-│           └── handlers/         # state, recetas, carpetas, precios, import, export
-└── web/
-    ├── index.html                # página principal
-    └── recetario.html            # interfaz del recetario
+|-- docker-compose.yml
+|-- .env.example
+|-- nginx/
+|   `-- nginx.conf
+|-- mysql/
+|   |-- init_recetario.sql        # esquema (6 tablas), se ejecuta una sola vez
+|   `-- seed_recetario.sql        # datos de ejemplo (21 recetas y 22 precios)
+|-- php/
+|   |-- Dockerfile
+|   `-- src/
+|       |-- health.php            # chequeo de salud
+|       |-- demo_db.php           # demo del stack (escribe en la base)
+|       `-- recetario/
+|           |-- api.php           # router
+|           |-- db.php            # conexión PDO
+|           |-- lib.php           # funciones compartidas
+|           `-- handlers/         # state, recetas, carpetas, precios, import, export
+`-- web/
+    |-- index.html                # página principal
+    |-- recetario.html            # interfaz del recetario
+    `-- vendor/                   # React, Babel e íconos (sin internet)
 ```
 
 ## Requisitos
 
 - Docker y Docker Compose.
+- No necesita internet para ejecutarse.
 
 ## Instalación
 
@@ -81,7 +83,7 @@ Aplicación web para guardar recetas con escalado de porciones, costos, modo coc
    docker compose up -d --build
 ```
 
-4. Abrir `http://localhost/recetario.html`.
+4. Esperar unos 30 segundos hasta que `docker compose ps` muestre los tres servicios `healthy` y abrir `http://localhost/recetario.html`.
 
 > [!WARNING]
 > - `MYSQL_DATABASE` debe ser `recetario`: el esquema crea esa base y el recetario se conecta a la que indique esta variable.
@@ -100,18 +102,21 @@ Los tres servicios deben estar `healthy`. Luego:
 | URL | Debe mostrar |
 |---|---|
 | `http://localhost/` | La página principal (`web/index.html`) |
-| `http://localhost/health.php` | `OK` (prueba nginx → FastCGI → PHP-FPM → MySQL) |
+| `http://localhost/health.php` | `OK` (prueba nginx, FastCGI, PHP-FPM y MySQL) |
 | `http://localhost/recetario/api.php?entity=state` | JSON con `carpetas` y `recetas` |
-| `http://localhost/recetario.html` | El recetario, sin "Error de conexión" |
+| `http://localhost/recetario.html` | El recetario, con 21 recetas y sin "Error de conexión" |
 
 Si `health.php` responde `FALLO`, el detalle está en `docker compose logs php`.
 
 ## Datos de ejemplo
 
-`mysql/seed_recetario.sql` carga recetas y precios de ejemplo en el primer arranque. MySQL ejecuta los archivos de `/docker-entrypoint-initdb.d/` en orden alfabético y solo con el volumen vacío: primero crea las tablas (`init_recetario.sql`) y luego inserta los datos.
+En el primer arranque MySQL ejecuta, en orden alfabético, los archivos de `/docker-entrypoint-initdb.d/`:
 
-- Si no quieres datos de ejemplo, borra su línea del `docker-compose.yml`.
-- En una instalación existente, estos archivos no se vuelven a ejecutar.
+1. `init_recetario.sql`: crea las 6 tablas.
+2. `seed_recetario.sql`: carga 21 recetas y 22 precios de ejemplo.
+
+- Solo se ejecutan con el volumen vacío. En una instalación existente no se repiten.
+- Si no quieres datos de ejemplo, borra la línea de `seed_recetario.sql` en `docker-compose.yml` antes del primer arranque.
 - El primer arranque con datos tarda más. Si el recetario muestra "Error de conexión", espera unos segundos y recarga.
 
 ## Base de datos
@@ -178,7 +183,7 @@ Restaurar en una base **vacía** (si ya hay datos, da error de clave duplicada):
 ```bash
 docker compose exec -T mysql sh -c 'mysql -u root -p"$MYSQL_ROOT_PASSWORD" --default-character-set=utf8mb4 recetario' < backups/recetario_datos.sql
 ```
-La carpeta `backups/` debe estar en el `.gitignore`. Prueba tus respaldos restaurándolos en un clon antes de confiar en ellos.
+La carpeta `backups/` está en el `.gitignore`. Prueba tus respaldos restaurándolos en un clon antes de confiar en ellos.
 
 ## Persistencia
 
@@ -186,6 +191,8 @@ La carpeta `backups/` debe estar en el `.gitignore`. Prueba tus respaldos restau
 docker compose down        # detiene y elimina contenedores; los datos se conservan
 docker compose down -v     # elimina también el volumen: BORRA la base de datos
 ```
+
+El volumen se llama `<carpeta-del-proyecto>_mysql-data`. Si borras la carpeta y clonas otra con el mismo nombre, Docker reutiliza el volumen y los datos siguen ahí.
 
 ## Problemas comunes
 
@@ -212,8 +219,10 @@ Deben aparecer `MYSQL_DATABASE`, `MYSQL_USER` y `MYSQL_PASSWORD`. Si no, revisa 
 **El recetario muestra "Error de conexión".** Revisa en orden:
 1. `http://localhost/recetario/api.php?entity=state` responde JSON.
 2. `MYSQL_DATABASE=recetario` en el `.env`.
-3. Las tablas existen: `docker compose exec mysql mysql -u root -p -e "USE recetario; SHOW TABLES;"`. Se crean con `mysql/init_recetario.sql` solo en el primer arranque.
+3. Las tablas existen: `docker compose exec mysql sh -c 'mysql -u root -p"$MYSQL_ROOT_PASSWORD" -e "USE recetario; SHOW TABLES;"'`.
 4. `docker compose logs php` muestra el motivo real.
+
+**`Can't initialize batch_readline` en el log de MySQL.** Un archivo montado desde `mysql/` no existe en tu carpeta, y Docker crea una carpeta vacía con ese nombre. Comprueba con `ls -la mysql/`: `init_recetario.sql` y `seed_recetario.sql` deben empezar con `-` (archivo), no con `d` (carpeta). Si son carpetas, bórralas con `rmdir`, restaura los archivos (`git checkout -- mysql/`) y recrea el volumen con `docker compose down -v`. El script solo corre con el volumen vacío.
 
 **"Copiar JSON" no copia.** El portapapeles del navegador solo funciona en HTTPS o en `localhost`. Desde otra dirección (por ejemplo `http://192.168.1.9`), la app descarga el archivo en su lugar.
 
@@ -222,7 +231,7 @@ Deben aparecer `MYSQL_DATABASE`, `MYSQL_USER` y `MYSQL_PASSWORD`. Si no, revisa 
 **Windows (Git Bash).**
 - Antepón `MSYS_NO_PATHCONV=1` a los `docker exec` o `docker compose exec` con rutas del contenedor, para que Git Bash no las convierta en rutas de Windows.
 - Si un comando interactivo falla con "the input device is not a TTY", antepón `winpty`.
-- Guarda los archivos del proyecto en UTF-8 sin BOM.
+- Guarda los archivos del proyecto en UTF-8 sin BOM. Si ves `Ã³` en lugar de `ó`, el archivo se está leyendo con otra codificación.
 
 ## Seguridad
 
@@ -235,14 +244,14 @@ Deben aparecer `MYSQL_DATABASE`, `MYSQL_USER` y `MYSQL_PASSWORD`. Si no, revisa 
 
 ## Arquitectura
 
-- Petición: usuario → navegador → HTTP → Nginx → (solo `.php`) FastCGI → PHP-FPM → MySQL.
-- Respuesta: MySQL → PHP-FPM → FastCGI → Nginx → HTTP → usuario.
+- Petición: usuario, navegador, HTTP, Nginx y, solo para `.php`, FastCGI, PHP-FPM y MySQL.
+- Respuesta: MySQL, PHP-FPM, FastCGI, Nginx, HTTP y usuario.
 - Nginx sirve `web/` (estáticos) directamente, sin pasar por PHP. Solo las rutas `.php` se envían a PHP-FPM.
 - Redes: `frontend` (nginx y php) y `backend` (php y mysql). Nginx no puede alcanzar MySQL; es el aislamiento previsto.
 
 ## Limitaciones conocidas
 
-- Babel compila en el navegador en cada carga, lo que hace m�s lenta la priemera carga en celular.
+- Babel compila el código en el navegador en cada carga, lo que hace más lenta la primera carga en celular.
 - La búsqueda por ingredientes compara palabras completas en texto libre: no reconoce sinónimos (palta/aguacate) ni distingue variantes.
 - Los precios de ingredientes no se enlazan con la pestaña Costos.
 - Los textos de la pestaña Costos y los nombres de ingredientes son texto libre, sin catálogo ni unidades normalizadas.
