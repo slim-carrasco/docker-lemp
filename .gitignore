@@ -5,3 +5,4 @@ mysql/data
 uploads/
 .DS_Store
 backups/
+nginx/certs/
