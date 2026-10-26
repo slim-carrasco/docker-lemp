@@ -23,6 +23,7 @@
       --bg-accent:#eff6ff;--bg-danger:#fef2f2;--bg-warning:#fffbeb;
     }
     body{font-family:var(--font-sans);background:var(--surface-0);color:var(--text-primary);-webkit-font-smoothing:antialiased}
+    a{color:var(--text-accent)}
     button{font-family:var(--font-sans);font-size:13px;padding:7px 13px;border-radius:var(--radius);border:.5px solid var(--border-strong);background:var(--surface-2);color:var(--text-primary);cursor:pointer;display:inline-flex;align-items:center;transition:background .1s;line-height:1}
     button:hover:not(:disabled){background:var(--surface-1)}
     button:disabled{opacity:.35;cursor:default;pointer-events:none}
@@ -48,27 +49,39 @@ const { useState, useEffect, useRef } = React;
 // ── Config ────────────────────────────────────────────────────────────────
 const API = '/recetario/api.php';
 
-// Toda respuesta con error HTTP o con campo "error" lanza una excepción
+// Toda respuesta con error HTTP o con campo "error" lanza una excepción con su código
 async function req(url, opts){
-  const r = await fetch(url, opts);
+  let r;
+  try { r = await fetch(url, opts); }
+  catch (e) { const err = new Error('Sin conexión con el servidor'); err.status = 0; throw err; }
   let data = null;
   try { data = await r.json(); } catch (e) { data = null; }
   if (!r.ok || (data && data.error)) {
-    throw new Error((data && data.error) || ('Error ' + r.status));
+    const err = new Error((data && data.error) || ('Error ' + r.status));
+    err.status = r.status;
+    // Sesión vencida en medio del uso: se vuelve a la pantalla de inicio de sesión
+    if (r.status === 401 && !/entity=(login|registro|me)\b/.test(url)) {
+      window.dispatchEvent(new Event('sesion-expirada'));
+    }
+    throw err;
   }
   return data;
 }
 const jsonOpts = (method, body) => ({method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
-const get    = (entity, id) => req(`${API}?entity=${entity}${id ? '&id='+id : ''}`);
-const getAll = (entity) => req(`${API}?entity=${entity}`);
-const post   = (entity, body) => req(`${API}?entity=${entity}`, jsonOpts('POST', body));
-const put    = (entity, id, body) => req(`${API}?entity=${entity}&id=${id}`, jsonOpts('PUT', body));
-const del    = (entity, id) => req(`${API}?entity=${entity}&id=${id}`, {method:'DELETE'});
+const get     = (entity, id) => req(`${API}?entity=${entity}${id ? '&id='+id : ''}`);
+const getAll  = (entity) => req(`${API}?entity=${entity}`);
+const post    = (entity, body) => req(`${API}?entity=${entity}`, jsonOpts('POST', body));
+const put     = (entity, id, body) => req(`${API}?entity=${entity}&id=${id}`, jsonOpts('PUT', body));
+const putSolo = (entity, body) => req(`${API}?entity=${entity}`, jsonOpts('PUT', body));
+const del     = (entity, id) => req(`${API}?entity=${entity}&id=${id}`, {method:'DELETE'});
 
 // ── Utils ─────────────────────────────────────────────────────────────────
 const uid  = () => Math.random().toString(36).slice(2,9);
 const scl  = (v,base,cur) => { if(v==null) return null; const r=(v*cur)/base; return Number.isInteger(r)?r:parseFloat(r.toFixed(2)); };
 const fmt  = s => { const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sc=s%60; return h?`${h}:${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`:`${String(m).padStart(2,'0')}:${String(sc).padStart(2,'0')}`; };
+const fechaCorta = f => { if(!f) return ''; const d=new Date(String(f).replace(' ','T')); return isNaN(d)?'':d.toLocaleDateString('es-PE'); };
+const fechaLarga = f => { const d=new Date(f+'T12:00:00'); return isNaN(d)?f:d.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long'}); };
+const ROL_TXT = {dueno:'Dueño',chef:'Chef',ayudante:'Ayudante'};
 
 // Descarga un archivo JSON (funciona en HTTP y HTTPS, a diferencia del portapapeles)
 function descargarJSON(nombreArchivo, data){
@@ -101,6 +114,9 @@ const S = {
   success:{background:'var(--fill-success)',color:'var(--on-success)',border:'none'},
   num:{flexShrink:0,width:26,height:26,borderRadius:99,background:'var(--fill-accent)',color:'var(--on-accent)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,fontWeight:500},
   alt:{fontSize:10,fontWeight:500,padding:'2px 7px',borderRadius:99,background:'var(--bg-warning)',color:'var(--text-warning)',whiteSpace:'nowrap',flexShrink:0},
+  hoy:{fontSize:10,fontWeight:500,padding:'2px 7px',borderRadius:99,background:'#ecfdf5',color:'var(--text-success)',whiteSpace:'nowrap',flexShrink:0},
+  rol:{fontSize:10,fontWeight:500,padding:'2px 7px',borderRadius:99,background:'var(--bg-accent)',color:'var(--text-accent)',whiteSpace:'nowrap'},
+  card:{background:'var(--surface-2)',border:'.5px solid var(--border-strong)',borderRadius:12,padding:18},
 };
 
 // ── Timer ─────────────────────────────────────────────────────────────────
@@ -126,11 +142,125 @@ function CarpetaBadge({color,nombre}){
   return <span style={{fontSize:10,fontWeight:500,padding:'2px 8px',borderRadius:99,background:color+'22',color,border:`1px solid ${color}44`,whiteSpace:'nowrap',flexShrink:0}}>{nombre}</span>;
 }
 
+// ── Toast ─────────────────────────────────────────────────────────────────
+function Toast({msg,err}){
+  return <div style={{textAlign:'center',padding:'8px 16px',background:err?'var(--text-danger)':'var(--fill-accent)',color:'var(--on-accent)',borderRadius:'var(--radius)',fontSize:13,fontWeight:500,marginBottom:12}}>{msg}</div>;
+}
+
+function Tab({activo,onClick,icono,children}){
+  return(
+    <button onClick={onClick} style={{fontSize:12,padding:'5px 12px',borderRadius:99,background:activo?'var(--fill-accent)':'transparent',color:activo?'var(--on-accent)':'var(--text-muted)',border:activo?'none':'1px solid var(--border)'}}>
+      <i className={`ti ti-${icono}`} style={{marginRight:4,fontSize:12}}/>{children}
+    </button>
+  );
+}
+
+// ── Login ─────────────────────────────────────────────────────────────────
+function Login({onOk,onRegistro,permitido,aviso}){
+  let guardado='';
+  try{guardado=localStorage.getItem('recetario_local')||''}catch(e){}
+  const[local,setLocal]=useState(guardado);
+  const[usuario,setUsuario]=useState('');
+  const[clave,setClave]=useState('');
+  const[err,setErr]=useState('');
+  const[loading,setLoading]=useState(false);
+
+  async function entrar(e){
+    e.preventDefault();
+    setErr('');
+    if(!local.trim()||!usuario.trim()||!clave){setErr('Completa el código del local, el usuario y la contraseña');return}
+    setLoading(true);
+    try{
+      const data=await post('login',{local:local.trim(),usuario:usuario.trim(),clave});
+      try{localStorage.setItem('recetario_local',data.local.slug)}catch(e2){}
+      onOk(data);
+    }catch(e2){
+      setErr(e2.message);
+      setLoading(false);
+    }
+  }
+
+  return(
+    <div style={{maxWidth:380,margin:'0 auto',padding:'48px 16px'}}>
+      <h1 style={{fontSize:26,fontWeight:500,fontFamily:'var(--font-voice)',marginBottom:4}}>Recetario</h1>
+      <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:22}}>Inicia sesión con el código de tu local.</p>
+      {aviso&&<div style={{padding:'8px 12px',background:'var(--bg-warning)',color:'var(--text-warning)',borderRadius:8,fontSize:13,marginBottom:14}}>{aviso}</div>}
+      <form onSubmit={entrar} style={S.card}>
+        <div style={{marginBottom:12}}>
+          <label style={S.lbl}>Código del local</label>
+          <input style={S.inp} value={local} onChange={e=>setLocal(e.target.value)} placeholder="ej.: local-de-ejemplo" autoCapitalize="none" autoComplete="off"/>
+        </div>
+        <div style={{marginBottom:12}}>
+          <label style={S.lbl}>Usuario</label>
+          <input style={S.inp} value={usuario} onChange={e=>setUsuario(e.target.value)} autoCapitalize="none" autoComplete="username"/>
+        </div>
+        <div style={{marginBottom:14}}>
+          <label style={S.lbl}>Contraseña</label>
+          <input style={S.inp} type="password" value={clave} onChange={e=>setClave(e.target.value)} autoComplete="current-password"/>
+        </div>
+        {err&&<p style={{fontSize:13,color:'var(--text-danger)',marginBottom:12}}>{err}</p>}
+        <button type="submit" style={{...S.acct,width:'100%',justifyContent:'center',padding:'10px 13px'}} disabled={loading}>{loading?'Entrando...':'Entrar'}</button>
+      </form>
+      <div style={{display:'flex',justifyContent:'space-between',flexWrap:'wrap',gap:8,marginTop:16,fontSize:13}}>
+        <a href={local.trim()?`menu.html?local=${encodeURIComponent(local.trim())}`:'menu.html'}>Ver el menú de hoy</a>
+        {permitido&&<a href="#" onClick={e=>{e.preventDefault();onRegistro()}}>Registrar mi local</a>}
+      </div>
+    </div>
+  );
+}
+
+// ── Registro de un local nuevo ────────────────────────────────────────────
+function Registro({onOk,onVolver}){
+  const[f,setF]=useState({local_nombre:'',nombre:'',usuario:'',clave:'',clave2:''});
+  const[err,setErr]=useState('');
+  const[loading,setLoading]=useState(false);
+  const set=(k,v)=>setF(p=>({...p,[k]:v}));
+
+  async function registrar(e){
+    e.preventDefault();
+    setErr('');
+    if(f.local_nombre.trim().length<3){setErr('El nombre del local debe tener al menos 3 caracteres');return}
+    if(!f.nombre.trim()){setErr('Escribe tu nombre');return}
+    if(!/^[a-z0-9._-]{3,30}$/.test(f.usuario.trim().toLowerCase())){setErr('El usuario debe tener de 3 a 30 caracteres: minúsculas, números, punto, guion o guion bajo');return}
+    if(f.clave.length<8||f.clave.length>72){setErr('La contraseña debe tener entre 8 y 72 caracteres');return}
+    if(f.clave!==f.clave2){setErr('Las contraseñas no coinciden');return}
+    setLoading(true);
+    try{
+      const data=await post('registro',{local_nombre:f.local_nombre.trim(),nombre:f.nombre.trim(),usuario:f.usuario.trim().toLowerCase(),clave:f.clave});
+      try{localStorage.setItem('recetario_local',data.local.slug)}catch(e2){}
+      onOk(data);
+    }catch(e2){
+      setErr(e2.message);
+      setLoading(false);
+    }
+  }
+
+  return(
+    <div style={{maxWidth:380,margin:'0 auto',padding:'40px 16px'}}>
+      <h1 style={{fontSize:24,fontWeight:500,fontFamily:'var(--font-voice)',marginBottom:4}}>Registrar mi local</h1>
+      <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:20}}>Crea el local y la cuenta del dueño. Luego podrás agregar a tu equipo.</p>
+      <form onSubmit={registrar} style={S.card}>
+        <div style={{marginBottom:12}}><label style={S.lbl}>Nombre del local</label><input style={S.inp} value={f.local_nombre} onChange={e=>set('local_nombre',e.target.value)} autoComplete="off"/></div>
+        <div style={{marginBottom:12}}><label style={S.lbl}>Tu nombre</label><input style={S.inp} value={f.nombre} onChange={e=>set('nombre',e.target.value)} autoComplete="name"/></div>
+        <div style={{marginBottom:12}}><label style={S.lbl}>Usuario</label><input style={S.inp} value={f.usuario} onChange={e=>set('usuario',e.target.value)} autoCapitalize="none" autoComplete="username"/></div>
+        <div style={{marginBottom:12}}><label style={S.lbl}>Contraseña (8 a 72 caracteres)</label><input style={S.inp} type="password" value={f.clave} onChange={e=>set('clave',e.target.value)} autoComplete="new-password"/></div>
+        <div style={{marginBottom:14}}><label style={S.lbl}>Repetir contraseña</label><input style={S.inp} type="password" value={f.clave2} onChange={e=>set('clave2',e.target.value)} autoComplete="new-password"/></div>
+        {err&&<p style={{fontSize:13,color:'var(--text-danger)',marginBottom:12}}>{err}</p>}
+        <button type="submit" style={{...S.acct,width:'100%',justifyContent:'center',padding:'10px 13px'}} disabled={loading}>{loading?'Creando...':'Crear local'}</button>
+      </form>
+      <p style={{marginTop:16,fontSize:13}}><a href="#" onClick={e=>{e.preventDefault();onVolver()}}>Volver a iniciar sesión</a></p>
+    </div>
+  );
+}
+
 // ── RecipeList ────────────────────────────────────────────────────────────
-function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
+function RecipeList({recipes,carpetas,perm,onSel,onNew,onImport,onManageCarpetas,onMover,onEliminar}){
   const[search,setSearch]=useState('');
   const[ingQ,setIngQ]=useState('');
   const[carpetaFiltro,setCarpetaFiltro]=useState('all');
+  const[selMode,setSelMode]=useState(false);
+  const[sel,setSel]=useState([]);
+  const[destino,setDestino]=useState('__');
 
   const terms = ingQ.split(',').map(t=>norm(t).trim()).filter(Boolean);
 
@@ -152,6 +282,33 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
     return r.nombre.toLowerCase().includes(q);
   });
 
+  // Las acciones masivas solo actúan sobre lo seleccionado que está a la vista
+  const idsVisibles = filtered.map(r=>r.id);
+  const selVis = sel.filter(id=>idsVisibles.includes(id));
+  const todosMarcados = idsVisibles.length>0 && idsVisibles.every(id=>sel.includes(id));
+  const toggle = id => setSel(s=>s.includes(id)?s.filter(x=>x!==id):[...s,id]);
+  function salirSel(){setSelMode(false);setSel([]);setDestino('__')}
+
+  async function mover(){
+    if(!selVis.length||destino==='__')return;
+    const ok=await onMover(selVis,destino===''?null:Number(destino));
+    if(ok) salirSel();
+  }
+  async function eliminar(){
+    const n=selVis.length;
+    if(!n)return;
+    let confirmar='';
+    if(n>5){
+      const t=prompt(`Vas a eliminar ${n} recetas con sus ingredientes y pasos. Escribe ELIMINAR para confirmar.`);
+      if(t!=='ELIMINAR')return;
+      confirmar='ELIMINAR';
+    }else if(!confirm(`¿Eliminar ${n} receta${n!==1?'s':''}? No se puede deshacer.`)){
+      return;
+    }
+    const ok=await onEliminar(selVis,confirmar);
+    if(ok) salirSel();
+  }
+
   return(
     <div>
       <div style={{display:'flex',gap:6,marginBottom:10}}>
@@ -160,7 +317,7 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
           <input style={{...S.inp,paddingLeft:30}} placeholder="Buscar receta..." value={search} onChange={e=>setSearch(e.target.value)}/>
         </div>
       </div>
-      <input style={{...S.inp,marginBottom:10}} placeholder="Ingredientes que tengo: pollo, papa..." value={ingQ} onChange={e=>setIngQ(e.target.value)}/>
+      <input style={{...S.inp,marginBottom:10}} placeholder="Ingredientes que tengo: pollo, arroz..." value={ingQ} onChange={e=>setIngQ(e.target.value)}/>
 
       <div style={{display:'flex',gap:6,marginBottom:14,flexWrap:'wrap'}}>
         {[{id:'all',nombre:'Todas',color:'#6b6560'},{id:'sin',nombre:'Sin carpeta',color:'#777'},...carpetas].map(c=>(
@@ -169,45 +326,67 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
             {c.nombre}
           </button>
         ))}
-        <button onClick={onManageCarpetas} style={{fontSize:11,padding:'4px 10px',borderRadius:99,color:'var(--text-muted)',borderStyle:'dashed'}}><i className="ti ti-folder-plus" style={{fontSize:11,marginRight:3}}/>Carpetas</button>
+        {perm.editar&&<button onClick={onManageCarpetas} style={{fontSize:11,padding:'4px 10px',borderRadius:99,color:'var(--text-muted)',borderStyle:'dashed'}}><i className="ti ti-folder-plus" style={{fontSize:11,marginRight:3}}/>Carpetas</button>}
       </div>
 
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:16,gap:8,flexWrap:'wrap'}}>
         <span style={{fontSize:13,color:'var(--text-muted)'}}>{filtered.length} receta{filtered.length!==1?'s':''}</span>
-        <div style={{display:'flex',gap:6}}>
-          <button onClick={exportAll}><i className="ti ti-download" style={{marginRight:4}}/>Exportar todo</button>
-          <button onClick={onImport}><i className="ti ti-upload" style={{marginRight:4}}/>Importar JSON</button>
-          <button onClick={onNew} style={S.acct}><i className="ti ti-plus" style={{marginRight:4}}/>Nueva</button>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+          {perm.dueno&&<button onClick={exportAll}><i className="ti ti-download" style={{marginRight:4}}/>Exportar todo</button>}
+          {perm.dueno&&<button onClick={onImport}><i className="ti ti-upload" style={{marginRight:4}}/>Importar JSON</button>}
+          {perm.editar&&<button onClick={()=>selMode?salirSel():setSelMode(true)}><i className="ti ti-checkbox" style={{marginRight:4}}/>{selMode?'Cancelar selección':'Seleccionar'}</button>}
+          {perm.editar&&<button onClick={onNew} style={S.acct}><i className="ti ti-plus" style={{marginRight:4}}/>Nueva</button>}
         </div>
       </div>
+
+      {selMode&&(
+        <div className="no-print" style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',padding:'10px 12px',background:'var(--bg-accent)',border:'.5px solid var(--border-accent)',borderRadius:10,marginBottom:14}}>
+          <span style={{fontSize:13,fontWeight:500}}>{selVis.length} seleccionada{selVis.length!==1?'s':''}</span>
+          <button onClick={()=>setSel(todosMarcados?[]:idsVisibles)}>{todosMarcados?'Quitar todas':'Seleccionar todo'}</button>
+          <select style={{...S.inp,width:'auto',minWidth:150}} value={destino} onChange={e=>setDestino(e.target.value)}>
+            <option value="__">Elegir carpeta...</option>
+            <option value="">Sin carpeta</option>
+            {carpetas.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+          <button onClick={mover} disabled={!selVis.length||destino==='__'}><i className="ti ti-folder-plus" style={{marginRight:4}}/>Mover</button>
+          {perm.dueno&&<button onClick={eliminar} disabled={!selVis.length} style={S.danger}><i className="ti ti-trash" style={{marginRight:4}}/>Eliminar</button>}
+        </div>
+      )}
 
       {filtered.length===0?(
         <div style={{textAlign:'center',padding:'48px 20px',color:'var(--text-muted)'}}>
           <i className="ti ti-file-plus" style={{fontSize:36,display:'block',marginBottom:10}}/>
-          <p style={{fontSize:14,color:'var(--text-secondary)'}}>{(search||terms.length)?'Sin resultados para esa búsqueda':carpetaFiltro!=='all'?'No hay recetas en esta carpeta':'Agrega tu primera receta o importa un JSON'}</p>
+          <p style={{fontSize:14,color:'var(--text-secondary)'}}>{(search||terms.length)?'Sin resultados para esa búsqueda':carpetaFiltro!=='all'?'No hay recetas en esta carpeta':perm.editar?'Agrega tu primera receta':'Aún no hay recetas'}</p>
         </div>
       ):(
         <div style={{display:'grid',gap:8}}>
-          {filtered.map(r=>(
-            <div key={r.id} onClick={()=>onSel(r.id)}
-              style={{background:'var(--surface-2)',borderRadius:12,padding:'14px 16px',border:'.5px solid var(--border-strong)',cursor:'pointer',transition:'border-color .15s'}}
-              onMouseEnter={e=>e.currentTarget.style.borderColor='var(--border-accent)'}
-              onMouseLeave={e=>e.currentTarget.style.borderColor='var(--border-strong)'}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10,marginBottom:4}}>
-                <span style={{fontSize:16,fontWeight:500,fontFamily:'var(--font-voice)',color:'var(--text-primary)'}}>{r.nombre}</span>
-                <div style={{display:'flex',gap:5,alignItems:'center',flexShrink:0}}>
-                  {r.carpeta_nombre&&<CarpetaBadge color={r.carpeta_color} nombre={r.carpeta_nombre}/>}
-                  {r.altitud&&<span style={S.alt}>Altitud</span>}
+          {filtered.map(r=>{
+            const marcada=sel.includes(r.id);
+            return(
+            <div key={r.id} onClick={()=>selMode?toggle(r.id):onSel(r.id)}
+              style={{background:'var(--surface-2)',borderRadius:12,padding:'14px 16px',border:marcada?'1.5px solid var(--border-accent)':'.5px solid var(--border-strong)',cursor:'pointer',transition:'border-color .15s',display:'flex',gap:12,alignItems:'flex-start'}}
+              onMouseEnter={e=>{if(!marcada)e.currentTarget.style.borderColor='var(--border-accent)'}}
+              onMouseLeave={e=>{if(!marcada)e.currentTarget.style.borderColor='var(--border-strong)'}}>
+              {selMode&&<input type="checkbox" checked={marcada} onChange={()=>toggle(r.id)} onClick={e=>e.stopPropagation()} style={{marginTop:4,flexShrink:0}}/>}
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:10,marginBottom:4}}>
+                  <span style={{fontSize:16,fontWeight:500,fontFamily:'var(--font-voice)',color:'var(--text-primary)'}}>{r.nombre}</span>
+                  <div style={{display:'flex',gap:5,alignItems:'center',flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end'}}>
+                    {r.disponible_hoy&&<span style={S.hoy}>Hoy</span>}
+                    {r.carpeta_nombre&&<CarpetaBadge color={r.carpeta_color} nombre={r.carpeta_nombre}/>}
+                    {r.altitud&&<span style={S.alt}>Altitud</span>}
+                  </div>
+                </div>
+                {r.descripcion&&<p style={{fontSize:13,color:'var(--text-muted)',lineHeight:1.5,marginBottom:6}}>{r.descripcion}</p>}
+                <div style={{display:'flex',gap:12,fontSize:11,color:'var(--text-muted)',flexWrap:'wrap'}}>
+                  <span><i className="ti ti-users" style={{fontSize:11,marginRight:3}}/>{r.porciones_base} porciones</span>
+                  <span><i className="ti ti-list-check" style={{fontSize:11,marginRight:3}}/>{r.n_pasos} pasos</span>
+                  {r.n_errores>0&&<span style={{color:'var(--text-warning)'}}><i className="ti ti-notes" style={{fontSize:11,marginRight:3}}/>{r.n_errores} error{r.n_errores!==1?'es':''} registrado{r.n_errores!==1?'s':''}</span>}
                 </div>
               </div>
-              {r.descripcion&&<p style={{fontSize:13,color:'var(--text-muted)',lineHeight:1.5,marginBottom:6}}>{r.descripcion}</p>}
-              <div style={{display:'flex',gap:12,fontSize:11,color:'var(--text-muted)',flexWrap:'wrap'}}>
-                <span><i className="ti ti-users" style={{fontSize:11,marginRight:3}}/>{r.porciones_base} porciones</span>
-                <span><i className="ti ti-list-check" style={{fontSize:11,marginRight:3}}/>{r.n_pasos} pasos</span>
-                {r.n_errores>0&&<span style={{color:'var(--text-warning)'}}><i className="ti ti-notes" style={{fontSize:11,marginRight:3}}/>{r.n_errores} error{r.n_errores!==1?'es':''} registrado{r.n_errores!==1?'s':''}</span>}
-              </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
@@ -215,7 +394,7 @@ function RecipeList({recipes,carpetas,onSel,onNew,onImport,onManageCarpetas}){
 }
 
 // ── RecipeDetail ──────────────────────────────────────────────────────────
-function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
+function RecipeDetail({recipe,carpetas,perm,onBack,onEdit,onDelete,onCook,onToggleMenu,onCarpeta}){
   const[svgs,setSvgs]=useState(recipe.porciones_base||4);
   const[copied,setCopied]=useState('');
   const carpeta=carpetas.find(c=>c.id==recipe.carpeta_id);
@@ -234,6 +413,7 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
       porciones_base:recipe.porciones_base,
       altitud:recipe.altitud,
       notas:recipe.notas,
+      precio_venta:recipe.precio_venta,
       fecha:recipe.fecha,
       ingredientes:(recipe.ingredientes||[]).map(i=>({nombre:i.nombre,cantidad:i.cantidad,unidad:i.unidad,precio:i.precio})),
       pasos:(recipe.pasos||[]).map(p=>({titulo:p.titulo,descripcion:p.descripcion,timer:p.timer})),
@@ -258,20 +438,36 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
       <button onClick={onBack} style={S.back}><i className="ti ti-arrow-left"/>Recetario</button>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,marginBottom:4}}>
         <h1 style={{fontSize:22,fontWeight:500,fontFamily:'var(--font-voice)',color:'var(--text-primary)',lineHeight:1.2}}>{recipe.nombre}</h1>
-        <div style={{display:'flex',gap:5,alignItems:'center',marginTop:4,flexShrink:0}}>
+        <div style={{display:'flex',gap:5,alignItems:'center',marginTop:4,flexShrink:0,flexWrap:'wrap',justifyContent:'flex-end'}}>
+          {recipe.disponible_hoy&&<span style={S.hoy}>Disponible hoy</span>}
           {carpeta&&<CarpetaBadge color={carpeta.color} nombre={carpeta.nombre}/>}
           {recipe.altitud&&<span style={S.alt}>Altitud</span>}
         </div>
       </div>
-      {recipe.descripcion&&<p style={{fontSize:13,color:'var(--text-muted)',lineHeight:1.6,marginBottom:16}}>{recipe.descripcion}</p>}
+      {recipe.descripcion&&<p style={{fontSize:13,color:'var(--text-muted)',lineHeight:1.6,marginBottom:8}}>{recipe.descripcion}</p>}
+      <p style={{fontSize:11,color:'var(--text-muted)',marginBottom:16}}>
+        {recipe.creado_por_nombre?`Creada por ${recipe.creado_por_nombre}`:'Creada'}{recipe.fecha?` · ${fechaCorta(recipe.fecha)}`:''}
+        {perm.precios&&recipe.precio_venta!=null?` · Precio de venta: S/ ${Number(recipe.precio_venta).toFixed(2)}`:''}
+      </p>
 
-      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:22}}>
+      <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
         <button onClick={onCook} style={S.acct}><i className="ti ti-chef-hat" style={{marginRight:4}}/>Modo cocina</button>
-        <button onClick={onEdit}><i className="ti ti-edit" style={{marginRight:4}}/>Editar</button>
-        <button onClick={copyJSON}><i className={`ti ti-${copied?'check':'copy'}`} style={{marginRight:4}}/>{copied||'Copiar JSON'}</button>
+        {perm.editar&&<button onClick={onEdit}><i className="ti ti-edit" style={{marginRight:4}}/>Editar</button>}
+        {perm.editar&&<button onClick={()=>onToggleMenu(recipe)}><i className="ti ti-calendar" style={{marginRight:4}}/>{recipe.disponible_hoy?'Quitar del menú de hoy':'Disponible hoy'}</button>}
+        {perm.dueno&&<button onClick={copyJSON}><i className={`ti ti-${copied?'check':'copy'}`} style={{marginRight:4}}/>{copied||'Copiar JSON'}</button>}
         <button onClick={imprimir}><i className="ti ti-printer" style={{marginRight:4}}/>Imprimir ficha</button>
-        <button onClick={onDelete} style={S.danger} title="Eliminar receta"><i className="ti ti-trash"/></button>
+        {perm.dueno&&<button onClick={onDelete} style={S.danger} title="Eliminar receta"><i className="ti ti-trash"/></button>}
       </div>
+
+      {perm.editar&&(
+        <div className="no-print" style={{display:'flex',alignItems:'center',gap:8,marginBottom:16}}>
+          <span style={{fontSize:12,color:'var(--text-muted)'}}>Carpeta</span>
+          <select style={{...S.inp,width:'auto',minWidth:170}} value={recipe.carpeta_id||''} onChange={e=>onCarpeta(recipe,e.target.value)}>
+            <option value="">Sin carpeta</option>
+            {carpetas.map(c=><option key={c.id} value={c.id}>{c.nombre}</option>)}
+          </select>
+        </div>
+      )}
 
       <div style={{display:'inline-flex',alignItems:'center',gap:12,padding:'8px 14px',borderRadius:'var(--radius)',background:'var(--bg-accent)',border:'.5px solid var(--border-accent)',marginBottom:24}}>
         <span style={{fontSize:12,color:'var(--text-muted)'}}>Porciones</span>
@@ -290,13 +486,13 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
                 <span style={{fontSize:13,color:'var(--text-primary)',flex:1}}>{ing.nombre}</span>
                 <div style={{display:'flex',gap:12,alignItems:'center',marginLeft:12,flexShrink:0}}>
                   <span style={{fontSize:13,fontWeight:500,color:'var(--text-accent)',whiteSpace:'nowrap'}}>{s!=null?`${s}${ing.unidad?' '+ing.unidad:''}`:'c/n'}</span>
-                  <span style={{fontSize:12,color:p!=null?'var(--text-success)':'var(--text-muted)',minWidth:64,textAlign:'right',whiteSpace:'nowrap'}}>{p!=null?`S/ ${p.toFixed(2)}`:'sin precio'}</span>
+                  {perm.precios&&<span style={{fontSize:12,color:p!=null?'var(--text-success)':'var(--text-muted)',minWidth:64,textAlign:'right',whiteSpace:'nowrap'}}>{p!=null?`S/ ${p.toFixed(2)}`:'sin precio'}</span>}
                 </div>
               </div>
             );
           })}
         </div>
-        {ingsConPrecio.length>0&&(
+        {perm.precios&&ingsConPrecio.length>0&&(
           <div style={{marginTop:8,padding:'10px 13px',background:'var(--bg-accent)',borderRadius:8,border:'.5px solid var(--border-accent)'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <span style={{fontSize:13,fontWeight:500,color:'var(--text-primary)'}}>Total ({svgs} porción{svgs!==1?'es':''})</span>
@@ -384,7 +580,7 @@ function CookMode({recipe,onExit}){
 
 // ── RecipeForm ────────────────────────────────────────────────────────────
 function RecipeForm({initial,carpetas,onSave,onCancel}){
-  const[f,setF]=useState({nombre:initial?.nombre||'',descripcion:initial?.descripcion||'',porciones_base:initial?.porciones_base||4,altitud:initial?.altitud??false,notas:initial?.notas||'',carpeta_id:initial?.carpeta_id||''});
+  const[f,setF]=useState({nombre:initial?.nombre||'',descripcion:initial?.descripcion||'',porciones_base:initial?.porciones_base||4,altitud:initial?.altitud??false,notas:initial?.notas||'',carpeta_id:initial?.carpeta_id||'',precio_venta:initial?.precio_venta??''});
   const[ings,setIngs]=useState(initial?.ingredientes?.length?initial.ingredientes.map(i=>({...i,_id:uid(),cantidad:i.cantidad??'',precio:i.precio??''})):[{_id:uid(),nombre:'',cantidad:'',unidad:'',precio:''}]);
   const[pasos,setPasos]=useState(initial?.pasos?.length?initial.pasos.map(p=>({...p,_id:uid(),timer:p.timer??''})):[{_id:uid(),titulo:'',descripcion:'',timer:''}]);
   const[errores,setErrores]=useState(initial?.errores||[]);
@@ -396,12 +592,14 @@ function RecipeForm({initial,carpetas,onSave,onCancel}){
   async function save(){
     if(!f.nombre.trim()){alert('La receta necesita un nombre');return}
     if(!(Number(f.porciones_base)>=1)){alert('Las porciones deben ser 1 o más');return}
+    if(f.precio_venta!==''&&f.precio_venta!=null&&Number(f.precio_venta)<0){alert('El precio de venta no puede ser negativo');return}
     const ingsOk=ings.filter(i=>i.nombre.trim());
     if(ingsOk.some(i=>(i.cantidad!==''&&i.cantidad!=null&&Number(i.cantidad)<0)||(i.precio!==''&&i.precio!=null&&Number(i.precio)<0))){
       alert('Cantidades y precios no pueden ser negativos');return;
     }
     setSaving(true);
     const data={...f,porciones_base:Number(f.porciones_base)||4,carpeta_id:f.carpeta_id||null,
+      precio_venta:f.precio_venta!==''&&f.precio_venta!=null?Number(f.precio_venta):null,
       ingredientes:ingsOk.map(i=>({nombre:i.nombre.trim(),cantidad:i.cantidad!==''&&i.cantidad!=null?Number(i.cantidad):null,unidad:i.unidad||null,precio:i.precio!==''&&i.precio!=null?Number(i.precio):null})),
       pasos:pasos.filter(p=>p.descripcion.trim()).map(p=>({titulo:p.titulo||null,descripcion:p.descripcion,timer:p.timer?Number(p.timer):null})),
       errores};
@@ -423,6 +621,7 @@ function RecipeForm({initial,carpetas,onSave,onCancel}){
 
       <div style={{display:'flex',gap:14,marginBottom:14,flexWrap:'wrap'}}>
         <div style={{width:110}}><label style={S.lbl}>Porciones base</label><input style={S.inp} type="number" min="1" value={f.porciones_base} onChange={e=>setF(p=>({...p,porciones_base:e.target.value}))}/></div>
+        <div style={{width:150}}><label style={S.lbl}>Precio de venta S/</label><input style={S.inp} type="number" min="0" step="0.01" placeholder="opcional" value={f.precio_venta} onChange={e=>setF(p=>({...p,precio_venta:e.target.value}))}/></div>
         <div style={{flex:1,minWidth:160}}>
           <label style={S.lbl}>Carpeta</label>
           <select style={{...S.inp}} value={f.carpeta_id||''} onChange={e=>setF(p=>({...p,carpeta_id:e.target.value}))}>
@@ -556,11 +755,6 @@ function ImportView({onImport,onCancel}){
       </div>
     </div>
   );
-}
-
-// ── Toast ─────────────────────────────────────────────────────────────────
-function Toast({msg,err}){
-  return <div style={{textAlign:'center',padding:'8px 16px',background:err?'var(--text-danger)':'var(--fill-accent)',color:'var(--on-accent)',borderRadius:'var(--radius)',fontSize:13,fontWeight:500,marginBottom:12}}>{msg}</div>;
 }
 
 // ── CostosSection ─────────────────────────────────────────────────────────
@@ -705,18 +899,250 @@ function CostosSection(){
   );
 }
 
-// ── App ───────────────────────────────────────────────────────────────────
-function App(){
+// ── Menú de hoy ───────────────────────────────────────────────────────────
+function MenuSection({sesion,perm,recetas,onCambio,setSesion}){
+  const[data,setData]=useState(null);
+  const[ready,setReady]=useState(false);
+  const[agregar,setAgregar]=useState('');
+  const[toast,setToast]=useState(null);
+  const notify=(msg,err=false)=>{setToast({msg,err});setTimeout(()=>setToast(null),2500)};
+  const url=`${location.origin}/menu.html?local=${encodeURIComponent(sesion.local.slug)}`;
+
+  async function load(){
+    try{setData(await getAll('menu'))}
+    catch(e){notify('No se pudo cargar el menú: '+e.message,true)}
+    setReady(true);
+  }
+  useEffect(()=>{load()},[]);
+
+  async function quitar(id){
+    try{await del('menu',id);await load();await onCambio();notify('Quitada del menú de hoy')}
+    catch(e){notify(e.message,true)}
+  }
+  async function sumar(){
+    if(!agregar)return;
+    try{await post('menu',{receta_id:Number(agregar)});setAgregar('');await load();await onCambio();notify('Agregada al menú de hoy')}
+    catch(e){notify(e.message,true)}
+  }
+  async function cambiarPrecios(v){
+    try{
+      await putSolo('ajustes',{mostrar_precios:v});
+      setSesion(s=>({...s,local:{...s.local,mostrar_precios:v}}));
+      notify(v?'Los precios se muestran en el menú público':'Los precios se ocultan en el menú público');
+    }catch(e){notify(e.message,true)}
+  }
+  function copiar(){
+    if(navigator.clipboard&&window.isSecureContext){
+      navigator.clipboard.writeText(url).then(()=>notify('Enlace copiado')).catch(()=>prompt('Copia el enlace:',url));
+    }else{prompt('Copia el enlace:',url)}
+  }
+
+  if(!ready)return <div style={{padding:40,textAlign:'center',color:'var(--text-muted)',fontSize:14}}>Cargando...</div>;
+
+  const platos=(data&&data.platos)||[];
+  const enMenu=new Set(platos.map(p=>p.id));
+  const disponibles=recetas.filter(r=>!enMenu.has(r.id));
+
+  return(
+    <div>
+      {toast&&<Toast msg={toast.msg} err={toast.err}/>}
+      <h2 style={{fontSize:18,fontWeight:500,fontFamily:'var(--font-voice)',marginBottom:2}}>Menú de hoy</h2>
+      <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:16,textTransform:'capitalize'}}>{data?fechaLarga(data.fecha):''}</p>
+
+      <div style={{...S.card,marginBottom:16}}>
+        <div style={S.lbl}>Enlace para los clientes</div>
+        <div style={{fontSize:12,color:'var(--text-secondary)',wordBreak:'break-all',marginBottom:8}}>{url}</div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap',alignItems:'center'}}>
+          <a href={url} target="_blank" rel="noopener" style={{fontSize:13}}>Abrir</a>
+          <button onClick={copiar}><i className="ti ti-link" style={{marginRight:4}}/>Copiar enlace</button>
+          {perm.dueno&&(
+            <label style={{display:'flex',alignItems:'center',gap:6,fontSize:13,cursor:'pointer',marginLeft:8}}>
+              <input type="checkbox" checked={!!sesion.local.mostrar_precios} onChange={e=>cambiarPrecios(e.target.checked)}/>
+              Mostrar precios de venta
+            </label>
+          )}
+        </div>
+      </div>
+
+      {platos.length===0?(
+        <div style={{textAlign:'center',padding:'36px 20px',color:'var(--text-muted)'}}>
+          <i className="ti ti-calendar" style={{fontSize:32,display:'block',marginBottom:8}}/>
+          <p style={{fontSize:14,color:'var(--text-secondary)'}}>Hoy no hay platos en el menú</p>
+        </div>
+      ):(
+        <div style={{display:'grid',gap:6,marginBottom:16}}>
+          {platos.map(p=>(
+            <div key={p.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 13px',background:'var(--surface-2)',borderRadius:8,border:'.5px solid var(--border)'}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontSize:14,fontWeight:500}}>{p.nombre}</div>
+                {p.descripcion&&<div style={{fontSize:12,color:'var(--text-muted)',marginTop:2}}>{p.descripcion}</div>}
+              </div>
+              {perm.precios&&p.precio_venta!=null&&<span style={{fontSize:14,fontWeight:500,color:'var(--text-accent)'}}>S/ {Number(p.precio_venta).toFixed(2)}</span>}
+              {perm.editar&&<button onClick={()=>quitar(p.id)} style={{padding:0,width:28,height:28,justifyContent:'center',color:'var(--text-danger)'}} title="Quitar del menú"><i className="ti ti-x" style={{fontSize:13}}/></button>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {perm.editar&&(
+        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>
+          <select style={{...S.inp,flex:1,minWidth:200}} value={agregar} onChange={e=>setAgregar(e.target.value)}>
+            <option value="">Agregar una receta al menú de hoy...</option>
+            {disponibles.map(r=><option key={r.id} value={r.id}>{r.nombre}</option>)}
+          </select>
+          <button onClick={sumar} style={S.acct} disabled={!agregar}><i className="ti ti-plus" style={{marginRight:4}}/>Agregar</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Usuarios (solo el dueño) ──────────────────────────────────────────────
+function UsuariosSection({sesion}){
+  const[lista,setLista]=useState([]);
+  const[ready,setReady]=useState(false);
+  const[form,setForm]=useState({usuario:'',nombre:'',rol:'chef',clave:''});
+  const[saving,setSaving]=useState(false);
+  const[toast,setToast]=useState(null);
+  const notify=(msg,err=false)=>{setToast({msg,err});setTimeout(()=>setToast(null),3000)};
+
+  async function load(){
+    try{setLista(await getAll('usuarios'))}
+    catch(e){notify('No se pudo cargar la lista: '+e.message,true)}
+    setReady(true);
+  }
+  useEffect(()=>{load()},[]);
+
+  async function crear(e){
+    e.preventDefault();
+    const u=form.usuario.trim().toLowerCase();
+    if(!/^[a-z0-9._-]{3,30}$/.test(u)){notify('El usuario debe tener de 3 a 30 caracteres: minúsculas, números, punto, guion o guion bajo',true);return}
+    if(!form.nombre.trim()){notify('Escribe el nombre de la persona',true);return}
+    if(form.clave.length<8||form.clave.length>72){notify('La contraseña debe tener entre 8 y 72 caracteres',true);return}
+    setSaving(true);
+    try{
+      await post('usuarios',{usuario:u,nombre:form.nombre.trim(),rol:form.rol,clave:form.clave});
+      setForm({usuario:'',nombre:'',rol:'chef',clave:''});
+      await load();
+      notify('Usuario creado');
+    }catch(err){notify(err.message,true)}
+    setSaving(false);
+  }
+  async function actualizar(id,datos,msg){
+    try{await put('usuarios',id,datos);await load();notify(msg)}
+    catch(e){notify(e.message,true);await load()}
+  }
+  function nuevaClave(u){
+    const c=prompt(`Nueva contraseña para ${u.usuario} (8 a 72 caracteres):`);
+    if(c===null)return;
+    actualizar(u.id,{clave:c},'Contraseña actualizada');
+  }
+
+  if(!ready)return <div style={{padding:40,textAlign:'center',color:'var(--text-muted)',fontSize:14}}>Cargando...</div>;
+
+  return(
+    <div>
+      {toast&&<Toast msg={toast.msg} err={toast.err}/>}
+      <h2 style={{fontSize:18,fontWeight:500,fontFamily:'var(--font-voice)',marginBottom:4}}>Usuarios del local</h2>
+      <p style={{fontSize:13,color:'var(--text-muted)',marginBottom:16}}>Código para iniciar sesión: <strong>{sesion.local.slug}</strong></p>
+
+      <div style={{display:'grid',gap:6,marginBottom:20}}>
+        {lista.map(u=>{
+          const yo=u.id===sesion.id;
+          return(
+            <div key={u.id} style={{display:'flex',alignItems:'center',gap:8,flexWrap:'wrap',padding:'10px 13px',background:'var(--surface-2)',borderRadius:8,border:'.5px solid var(--border)',opacity:u.activo?1:.6}}>
+              <div style={{flex:1,minWidth:140}}>
+                <div style={{fontSize:13,fontWeight:500}}>{u.nombre}{yo?' (tú)':''}</div>
+                <div style={{fontSize:11,color:'var(--text-muted)'}}>{u.usuario}{u.activo?'':' · desactivado'}</div>
+              </div>
+              <select style={{...S.inp,width:'auto'}} value={u.rol} disabled={yo} onChange={e=>actualizar(u.id,{rol:e.target.value},'Rol actualizado')}>
+                <option value="dueno">Dueño</option>
+                <option value="chef">Chef</option>
+                <option value="ayudante">Ayudante</option>
+              </select>
+              <button onClick={()=>nuevaClave(u)} title="Cambiar contraseña"><i className="ti ti-key"/></button>
+              <button disabled={yo} onClick={()=>actualizar(u.id,{activo:!u.activo},u.activo?'Usuario desactivado':'Usuario activado')}>{u.activo?'Desactivar':'Activar'}</button>
+            </div>
+          );
+        })}
+      </div>
+
+      <form onSubmit={crear} style={S.card}>
+        <div style={S.lbl}>Nuevo usuario</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10,marginBottom:10}}>
+          <input style={S.inp} placeholder="Nombre de la persona" value={form.nombre} onChange={e=>setForm(p=>({...p,nombre:e.target.value}))}/>
+          <input style={S.inp} placeholder="Usuario (para entrar)" value={form.usuario} onChange={e=>setForm(p=>({...p,usuario:e.target.value}))} autoCapitalize="none" autoComplete="off"/>
+          <select style={S.inp} value={form.rol} onChange={e=>setForm(p=>({...p,rol:e.target.value}))}>
+            <option value="chef">Chef</option>
+            <option value="ayudante">Ayudante</option>
+            <option value="dueno">Dueño</option>
+          </select>
+          <input style={S.inp} type="password" placeholder="Contraseña (8 a 72)" value={form.clave} onChange={e=>setForm(p=>({...p,clave:e.target.value}))} autoComplete="new-password"/>
+        </div>
+        <button type="submit" style={S.acct} disabled={saving}><i className="ti ti-plus" style={{marginRight:4}}/>{saving?'Creando...':'Crear usuario'}</button>
+      </form>
+    </div>
+  );
+}
+
+// ── Mi cuenta ─────────────────────────────────────────────────────────────
+function CuentaSection({sesion}){
+  const[f,setF]=useState({actual:'',nueva:'',repetir:''});
+  const[saving,setSaving]=useState(false);
+  const[toast,setToast]=useState(null);
+  const notify=(msg,err=false)=>{setToast({msg,err});setTimeout(()=>setToast(null),3000)};
+
+  async function guardar(e){
+    e.preventDefault();
+    if(f.nueva!==f.repetir){notify('Las contraseñas nuevas no coinciden',true);return}
+    if(f.nueva.length<8||f.nueva.length>72){notify('La contraseña debe tener entre 8 y 72 caracteres',true);return}
+    setSaving(true);
+    try{
+      await post('clave',{actual:f.actual,nueva:f.nueva});
+      setF({actual:'',nueva:'',repetir:''});
+      notify('Contraseña actualizada');
+    }catch(err){notify(err.message,true)}
+    setSaving(false);
+  }
+
+  return(
+    <div>
+      {toast&&<Toast msg={toast.msg} err={toast.err}/>}
+      <h2 style={{fontSize:18,fontWeight:500,fontFamily:'var(--font-voice)',marginBottom:14}}>Mi cuenta</h2>
+      <div style={{...S.card,marginBottom:16,fontSize:13,lineHeight:1.9}}>
+        <div><span style={{color:'var(--text-muted)'}}>Nombre: </span>{sesion.nombre}</div>
+        <div><span style={{color:'var(--text-muted)'}}>Usuario: </span>{sesion.usuario}</div>
+        <div><span style={{color:'var(--text-muted)'}}>Rol: </span>{ROL_TXT[sesion.rol]||sesion.rol}</div>
+        <div><span style={{color:'var(--text-muted)'}}>Local: </span>{sesion.local.nombre} · código <strong>{sesion.local.slug}</strong></div>
+      </div>
+      <form onSubmit={guardar} style={S.card}>
+        <div style={S.lbl}>Cambiar contraseña</div>
+        <div style={{display:'grid',gap:10,marginBottom:12}}>
+          <input style={S.inp} type="password" placeholder="Contraseña actual" value={f.actual} onChange={e=>setF(p=>({...p,actual:e.target.value}))} autoComplete="current-password"/>
+          <input style={S.inp} type="password" placeholder="Contraseña nueva (8 a 72)" value={f.nueva} onChange={e=>setF(p=>({...p,nueva:e.target.value}))} autoComplete="new-password"/>
+          <input style={S.inp} type="password" placeholder="Repetir la nueva" value={f.repetir} onChange={e=>setF(p=>({...p,repetir:e.target.value}))} autoComplete="new-password"/>
+        </div>
+        <button type="submit" style={S.acct} disabled={saving}>{saving?'Guardando...':'Guardar contraseña'}</button>
+      </form>
+    </div>
+  );
+}
+
+// ── Aplicación con sesión iniciada ────────────────────────────────────────
+function Principal({sesion,setSesion,onSalir,bienvenida,cerrarBienvenida}){
+  const rol=sesion.rol;
+  const perm={editar:rol==='dueno'||rol==='chef',dueno:rol==='dueno',precios:rol!=='ayudante'};
   const[state,setState]=useState({recetas:[],carpetas:[]});
   const[ready,setReady]=useState(false);
   const[view,setView]=useState('list');
+  const[seccion,setSeccion]=useState('recetario');
   const[selId,setSelId]=useState(null);
   const[selRecipe,setSelRecipe]=useState(null);
   const[toast,setToast]=useState(null);
   const[error,setError]=useState(null);
-  const[seccion,setSeccion]=useState('recetario');
 
-  const notify=(msg,err=false)=>{setToast({msg,err});setTimeout(()=>setToast(null),2500)};
+  const notify=(msg,err=false,ms=2500)=>{setToast({msg,err});setTimeout(()=>setToast(null),ms)};
+  const irA=s=>{setSeccion(s);setView('list')};
 
   async function reload(){
     try{
@@ -724,11 +1150,10 @@ function App(){
       setState({recetas:data.recetas||[],carpetas:data.carpetas||[]});
       setError(null);
     }catch(e){
-      setError('No se pudo conectar con la API: '+e.message);
+      if(e.status!==401) setError('No se pudo conectar con la API: '+e.message);
     }
     setReady(true);
   }
-
   useEffect(()=>{reload()},[]);
 
   async function loadRecipe(id){
@@ -802,6 +1227,54 @@ function App(){
     notify(`${arr.length} receta${arr.length>1?'s':''} importada${arr.length>1?'s':''}`);
   }
 
+  async function toggleMenu(rec){
+    try{
+      if(rec.disponible_hoy) await del('menu',rec.id);
+      else await post('menu',{receta_id:rec.id});
+      setSelRecipe(r=>r&&r.id===rec.id?{...r,disponible_hoy:!rec.disponible_hoy}:r);
+      await reload();
+      notify(rec.disponible_hoy?'Quitada del menú de hoy':'Agregada al menú de hoy');
+    }catch(e){
+      notify('No se pudo actualizar el menú: '+e.message,true);
+    }
+  }
+
+  async function cambiarCarpeta(rec,valor){
+    const cid=valor?Number(valor):null;
+    try{
+      await post('mover',{ids:[rec.id],carpeta_id:cid});
+      setSelRecipe(r=>r&&r.id===rec.id?{...r,carpeta_id:cid}:r);
+      await reload();
+      notify('Carpeta actualizada');
+    }catch(e){
+      notify('No se pudo cambiar la carpeta: '+e.message,true);
+    }
+  }
+
+  async function moverLote(ids,carpetaId){
+    try{
+      await post('mover',{ids,carpeta_id:carpetaId});
+      await reload();
+      notify(`${ids.length} receta${ids.length!==1?'s':''} movida${ids.length!==1?'s':''}`);
+      return true;
+    }catch(e){
+      notify('No se pudo mover: '+e.message,true);
+      return false;
+    }
+  }
+
+  async function eliminarLote(ids,confirmar){
+    try{
+      await post('eliminar',{ids,confirmar});
+      await reload();
+      notify(`${ids.length} receta${ids.length!==1?'s':''} eliminada${ids.length!==1?'s':''}`);
+      return true;
+    }catch(e){
+      notify('No se pudo eliminar: '+e.message,true);
+      return false;
+    }
+  }
+
   if(!ready)return <div style={{padding:40,textAlign:'center',color:'var(--text-muted)',fontSize:14}}>Cargando...</div>;
   if(error)return(
     <div style={{padding:40,maxWidth:500,margin:'0 auto'}}>
@@ -823,29 +1296,101 @@ function App(){
     <div style={S.page}>
       {toast&&<Toast msg={toast.msg} err={toast.err}/>}
       {view!=='cook'&&(
-        <div style={S.hdr} className="no-print">
-          <span onClick={()=>{setView('list');setSeccion('recetario')}} style={{fontFamily:'var(--font-voice)',fontSize:17,fontWeight:500,color:'var(--text-primary)',cursor:'pointer'}}>Recetario</span>
-          <div style={{display:'flex',gap:6,alignItems:'center'}}>
-            <button onClick={()=>{setSeccion('recetario');setView('list')}} style={{fontSize:12,padding:'5px 12px',borderRadius:99,background:seccion==='recetario'?'var(--fill-accent)':'transparent',color:seccion==='recetario'?'var(--on-accent)':'var(--text-muted)',border:seccion==='recetario'?'none':'1px solid var(--border)'}}><i className="ti ti-book" style={{marginRight:4,fontSize:12}}/>Recetas</button>
-            <button onClick={()=>setSeccion('costos')} style={{fontSize:12,padding:'5px 12px',borderRadius:99,background:seccion==='costos'?'var(--fill-accent)':'transparent',color:seccion==='costos'?'var(--on-accent)':'var(--text-muted)',border:seccion==='costos'?'none':'1px solid var(--border)'}}><i className="ti ti-tag" style={{marginRight:4,fontSize:12}}/>Costos</button>
+        <div className="no-print" style={{paddingTop:16}}>
+          <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:8,flexWrap:'wrap',marginBottom:12}}>
+            <div>
+              <span onClick={()=>irA('recetario')} style={{fontFamily:'var(--font-voice)',fontSize:17,fontWeight:500,color:'var(--text-primary)',cursor:'pointer'}}>Recetario</span>
+              <div style={{fontSize:11,color:'var(--text-muted)'}}>{sesion.local.nombre}</div>
+            </div>
+            <div style={{display:'flex',gap:6,alignItems:'center'}}>
+              <button onClick={()=>irA('cuenta')} title="Mi cuenta"><i className="ti ti-user" style={{marginRight:5}}/>{sesion.nombre}<span style={{...S.rol,marginLeft:7}}>{ROL_TXT[rol]}</span></button>
+              <button onClick={onSalir} title="Cerrar sesión"><i className="ti ti-logout"/></button>
+            </div>
+          </div>
+          <div style={{display:'flex',gap:6,flexWrap:'wrap',paddingBottom:14,borderBottom:'.5px solid var(--border-strong)',marginBottom:20}}>
+            <Tab activo={seccion==='recetario'} onClick={()=>irA('recetario')} icono="book">Recetas</Tab>
+            <Tab activo={seccion==='menu'} onClick={()=>irA('menu')} icono="calendar">Menú de hoy</Tab>
+            {perm.precios&&<Tab activo={seccion==='costos'} onClick={()=>irA('costos')} icono="tag">Costos</Tab>}
+            {perm.dueno&&<Tab activo={seccion==='usuarios'} onClick={()=>irA('usuarios')} icono="users">Usuarios</Tab>}
           </div>
         </div>
       )}
 
-      {seccion==='recetario'&&view==='list'&&<RecipeList recipes={state.recetas} carpetas={state.carpetas} onSel={loadRecipe} onNew={()=>{setSelId(null);setSelRecipe(null);setView('form')}} onImport={()=>setView('import')} onManageCarpetas={()=>setView('carpetas')}/>}
+      {bienvenida&&seccion==='recetario'&&view==='list'&&(
+        <div className="no-print" style={{padding:'10px 14px',background:'var(--bg-accent)',border:'.5px solid var(--border-accent)',borderRadius:10,fontSize:13,lineHeight:1.6,marginBottom:14}}>
+          Tu local «{bienvenida.local}» quedó registrado. Para volver a entrar usa el código <strong>{bienvenida.slug}</strong>, tu usuario y tu contraseña.
+          <div style={{marginTop:8}}><button onClick={cerrarBienvenida}>Entendido</button></div>
+        </div>
+      )}
 
-      {seccion==='recetario'&&view==='detail'&&selRecipe&&<RecipeDetail recipe={selRecipe} carpetas={state.carpetas} onBack={()=>setView('list')} onEdit={()=>setView('form')} onDelete={deleteRecipe} onCook={()=>setView('cook')}/>}
+      {seccion==='recetario'&&view==='list'&&<RecipeList recipes={state.recetas} carpetas={state.carpetas} perm={perm} onSel={loadRecipe} onNew={()=>{setSelId(null);setSelRecipe(null);setView('form')}} onImport={()=>setView('import')} onManageCarpetas={()=>setView('carpetas')} onMover={moverLote} onEliminar={eliminarLote}/>}
 
-      {seccion==='recetario'&&view==='form'&&<RecipeForm initial={selId?selRecipe:null} carpetas={state.carpetas} onSave={saveRecipe} onCancel={()=>setView(selId?'detail':'list')}/>}
+      {seccion==='recetario'&&view==='detail'&&selRecipe&&<RecipeDetail recipe={selRecipe} carpetas={state.carpetas} perm={perm} onBack={()=>setView('list')} onEdit={()=>setView('form')} onDelete={deleteRecipe} onCook={()=>setView('cook')} onToggleMenu={toggleMenu} onCarpeta={cambiarCarpeta}/>}
+
+      {seccion==='recetario'&&view==='form'&&perm.editar&&<RecipeForm initial={selId?selRecipe:null} carpetas={state.carpetas} onSave={saveRecipe} onCancel={()=>setView(selId?'detail':'list')}/>}
 
       {seccion==='recetario'&&view==='cook'&&selRecipe&&<CookMode recipe={selRecipe} onExit={()=>setView('detail')}/>}
 
-      {seccion==='recetario'&&view==='import'&&<ImportView onImport={importRecipes} onCancel={()=>setView('list')}/>}
+      {seccion==='recetario'&&view==='import'&&perm.dueno&&<ImportView onImport={importRecipes} onCancel={()=>setView('list')}/>}
 
-      {seccion==='recetario'&&view==='carpetas'&&<CarpetasManager carpetas={state.carpetas} onSave={saveCarpeta} onDelete={deleteCarpeta} onClose={()=>setView('list')}/>}
-      {seccion==='costos'&&view!=='cook'&&<CostosSection/>}
+      {seccion==='recetario'&&view==='carpetas'&&perm.editar&&<CarpetasManager carpetas={state.carpetas} onSave={saveCarpeta} onDelete={deleteCarpeta} onClose={()=>setView('list')}/>}
+
+      {seccion==='menu'&&<MenuSection sesion={sesion} perm={perm} recetas={state.recetas} onCambio={reload} setSesion={setSesion}/>}
+      {seccion==='costos'&&perm.precios&&<CostosSection/>}
+      {seccion==='usuarios'&&perm.dueno&&<UsuariosSection sesion={sesion}/>}
+      {seccion==='cuenta'&&<CuentaSection sesion={sesion}/>}
     </div>
   );
+}
+
+// ── App: decide entre inicio de sesión y aplicación ───────────────────────
+function App(){
+  const[sesion,setSesion]=useState(undefined);   // undefined: comprobando · null: sin sesión
+  const[pantalla,setPantalla]=useState('login');
+  const[permitido,setPermitido]=useState(false);
+  const[errRed,setErrRed]=useState(null);
+  const[aviso,setAviso]=useState('');
+  const[bienvenida,setBienvenida]=useState(null);
+
+  async function comprobar(){
+    setErrRed(null);
+    try{
+      const d=await get('me');
+      setSesion(d);
+    }catch(e){
+      if(e.status===401) setSesion(null);
+      else setErrRed(e.message);
+    }
+    try{const r=await get('registro');setPermitido(!!r.permitido)}catch(e){}
+  }
+  useEffect(()=>{comprobar()},[]);
+
+  useEffect(()=>{
+    const h=()=>{setSesion(null);setAviso('Tu sesión terminó. Inicia sesión de nuevo.');setPantalla('login')};
+    window.addEventListener('sesion-expirada',h);
+    return ()=>window.removeEventListener('sesion-expirada',h);
+  },[]);
+
+  async function salir(){
+    try{await post('logout',{})}catch(e){}
+    setSesion(null);setAviso('');setBienvenida(null);setPantalla('login');
+  }
+
+  if(errRed)return(
+    <div style={{padding:40,maxWidth:500,margin:'0 auto'}}>
+      <div style={{padding:'16px 20px',background:'var(--bg-danger)',borderRadius:12,border:'.5px solid var(--border-danger)'}}>
+        <div style={{fontSize:14,fontWeight:500,color:'var(--text-danger)',marginBottom:6}}>Error de conexión</div>
+        <div style={{fontSize:13,color:'var(--text-danger)',lineHeight:1.5,marginBottom:12}}>{errRed}</div>
+        <button onClick={comprobar} style={S.acct}>Reintentar</button>
+      </div>
+    </div>
+  );
+  if(sesion===undefined)return <div style={{padding:40,textAlign:'center',color:'var(--text-muted)',fontSize:14}}>Cargando...</div>;
+  if(!sesion){
+    if(pantalla==='registro')return <Registro onOk={d=>{setSesion(d);setBienvenida({local:d.local.nombre,slug:d.local.slug})}} onVolver={()=>setPantalla('login')}/>;
+    return <Login onOk={d=>{setAviso('');setSesion(d)}} onRegistro={()=>setPantalla('registro')} permitido={permitido} aviso={aviso}/>;
+  }
+  return <Principal key={sesion.id} sesion={sesion} setSesion={setSesion} onSalir={salir} bienvenida={bienvenida} cerrarBienvenida={()=>setBienvenida(null)}/>;
 }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
