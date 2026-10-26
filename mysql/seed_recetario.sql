@@ -57,7 +57,7 @@ UNLOCK TABLES;
 /*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
--- Dump completed on 2026-10-26 20:02:46
+-- Dump completed on 2026-10-27  0:46:49
 -- MySQL dump 10.13  Distrib 8.0.46, for Linux (x86_64)
 --
 -- Host: localhost    Database: recetario
@@ -80,3 +80,38 @@ UNLOCK TABLES;
 --
 -- WHERE:  receta_id IN (SELECT id FROM recetas WHERE local_id=1)
 
+LOCK TABLES `ingredientes` WRITE;
+/*!40000 ALTER TABLE `ingredientes` DISABLE KEYS */;
+/*!40000 ALTER TABLE `ingredientes` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Dumping data for table `pasos`
+--
+-- WHERE:  receta_id IN (SELECT id FROM recetas WHERE local_id=1)
+
+LOCK TABLES `pasos` WRITE;
+/*!40000 ALTER TABLE `pasos` DISABLE KEYS */;
+/*!40000 ALTER TABLE `pasos` ENABLE KEYS */;
+UNLOCK TABLES;
+
+--
+-- Dumping data for table `errores`
+--
+-- WHERE:  receta_id IN (SELECT id FROM recetas WHERE local_id=1)
+
+LOCK TABLES `errores` WRITE;
+/*!40000 ALTER TABLE `errores` DISABLE KEYS */;
+/*!40000 ALTER TABLE `errores` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40101 SET CHARACTER_SET_CLIENT=@OLD_CHARACTER_SET_CLIENT */;
+/*!40101 SET CHARACTER_SET_RESULTS=@OLD_CHARACTER_SET_RESULTS */;
+/*!40101 SET COLLATION_CONNECTION=@OLD_COLLATION_CONNECTION */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
+-- Dump completed on 2026-10-27  0:46:49

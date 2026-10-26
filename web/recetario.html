@@ -447,7 +447,7 @@ function RecipeDetail({recipe,carpetas,perm,onBack,onEdit,onDelete,onCook,onTogg
       {recipe.descripcion&&<p style={{fontSize:13,color:'var(--text-muted)',lineHeight:1.6,marginBottom:8}}>{recipe.descripcion}</p>}
       <p style={{fontSize:11,color:'var(--text-muted)',marginBottom:16}}>
         {recipe.creado_por_nombre?`Creada por ${recipe.creado_por_nombre}`:'Creada'}{recipe.fecha?` · ${fechaCorta(recipe.fecha)}`:''}
-        {perm.precios&&recipe.precio_venta!=null?` · Precio de venta: S/ ${Number(recipe.precio_venta).toFixed(2)}`:''}
+        {perm.precios&&recipe.precio_venta!=null?` · Precio de venta por porción: S/ ${Number(recipe.precio_venta).toFixed(2)}`:''}
       </p>
 
       <div style={{display:'flex',gap:6,flexWrap:'wrap',marginBottom:16}}>
@@ -621,7 +621,7 @@ function RecipeForm({initial,carpetas,onSave,onCancel}){
 
       <div style={{display:'flex',gap:14,marginBottom:14,flexWrap:'wrap'}}>
         <div style={{width:110}}><label style={S.lbl}>Porciones base</label><input style={S.inp} type="number" min="1" value={f.porciones_base} onChange={e=>setF(p=>({...p,porciones_base:e.target.value}))}/></div>
-        <div style={{width:150}}><label style={S.lbl}>Precio de venta S/</label><input style={S.inp} type="number" min="0" step="0.01" placeholder="opcional" value={f.precio_venta} onChange={e=>setF(p=>({...p,precio_venta:e.target.value}))}/></div>
+        <div style={{width:150}}><label style={S.lbl}>Precio de venta por porción S/</label><input style={S.inp} type="number" min="0" step="0.01" placeholder="opcional" value={f.precio_venta} onChange={e=>setF(p=>({...p,precio_venta:e.target.value}))}/></div>
         <div style={{flex:1,minWidth:160}}>
           <label style={S.lbl}>Carpeta</label>
           <select style={{...S.inp}} value={f.carpeta_id||''} onChange={e=>setF(p=>({...p,carpeta_id:e.target.value}))}>
