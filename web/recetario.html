@@ -28,6 +28,13 @@
     button:disabled{opacity:.35;cursor:default;pointer-events:none}
     input,textarea,select{font-family:var(--font-sans);font-size:13px}
     input[type=checkbox]{width:14px;height:14px;cursor:pointer}
+    .solo-print{display:none}
+    @media print{
+      @page{margin:14mm}
+      body{background:#fff}
+      .no-print,button{display:none !important}
+      .solo-print{display:block !important}
+    }
   </style>
 </head>
 <body>
@@ -212,7 +219,12 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
   const[svgs,setSvgs]=useState(recipe.porciones_base||4);
   const[copied,setCopied]=useState('');
   const carpeta=carpetas.find(c=>c.id==recipe.carpeta_id);
-
+  function imprimir(){
+    const anterior=document.title;
+    document.title='Ficha - '+recipe.nombre;
+    window.print();
+    document.title=anterior;
+  }
   // Mismo formato que "Exportar todo": sin ids, con el nombre de la carpeta
   function copyJSON(){
     const exp={
@@ -242,6 +254,7 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
 
   return(
     <div>
+      <div className="solo-print" style={{fontSize:11,color:'#555',marginBottom:8}}>Ficha de receta estándar · {svgs} porciones</div>
       <button onClick={onBack} style={S.back}><i className="ti ti-arrow-left"/>Recetario</button>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:12,marginBottom:4}}>
         <h1 style={{fontSize:22,fontWeight:500,fontFamily:'var(--font-voice)',color:'var(--text-primary)',lineHeight:1.2}}>{recipe.nombre}</h1>
@@ -256,6 +269,7 @@ function RecipeDetail({recipe,carpetas,onBack,onEdit,onDelete,onCook}){
         <button onClick={onCook} style={S.acct}><i className="ti ti-chef-hat" style={{marginRight:4}}/>Modo cocina</button>
         <button onClick={onEdit}><i className="ti ti-edit" style={{marginRight:4}}/>Editar</button>
         <button onClick={copyJSON}><i className={`ti ti-${copied?'check':'copy'}`} style={{marginRight:4}}/>{copied||'Copiar JSON'}</button>
+        <button onClick={imprimir}><i className="ti ti-printer" style={{marginRight:4}}/>Imprimir ficha</button>
         <button onClick={onDelete} style={S.danger} title="Eliminar receta"><i className="ti ti-trash"/></button>
       </div>
 
@@ -809,7 +823,7 @@ function App(){
     <div style={S.page}>
       {toast&&<Toast msg={toast.msg} err={toast.err}/>}
       {view!=='cook'&&(
-        <div style={S.hdr}>
+        <div style={S.hdr} className="no-print">
           <span onClick={()=>{setView('list');setSeccion('recetario')}} style={{fontFamily:'var(--font-voice)',fontSize:17,fontWeight:500,color:'var(--text-primary)',cursor:'pointer'}}>Recetario</span>
           <div style={{display:'flex',gap:6,alignItems:'center'}}>
             <button onClick={()=>{setSeccion('recetario');setView('list')}} style={{fontSize:12,padding:'5px 12px',borderRadius:99,background:seccion==='recetario'?'var(--fill-accent)':'transparent',color:seccion==='recetario'?'var(--on-accent)':'var(--text-muted)',border:seccion==='recetario'?'none':'1px solid var(--border)'}}><i className="ti ti-book" style={{marginRight:4,fontSize:12}}/>Recetas</button>

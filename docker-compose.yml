@@ -1,18 +1,32 @@
 services:
+  certs:
+    container_name: lemp-certs
+    image: alpine:3.20
+    volumes:
+      - ./nginx/certs:/certs
+    command: >
+      sh -c "[ -f /certs/server.crt ] || (apk add --no-cache openssl &&
+      openssl req -x509 -nodes -newkey rsa:2048 -days 365
+      -keyout /certs/server.key -out /certs/server.crt
+      -subj '/CN=localhost'
+      -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1')"
+
   nginx:
     container_name: lemp-nginx
     image: nginx:1.29.4-alpine
     ports:
       - 80:80
+      - 443:443
     restart: unless-stopped
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./nginx/certs:/etc/nginx/certs:ro
       - ./web:/usr/share/nginx/html
       - ./php/src:/var/www/html
     networks:
       - frontend
     healthcheck:
-      test: [ "CMD-SHELL", "curl --fail http://localhost:80 || exit 1"  ]
+      test: [ "CMD-SHELL", "curl --fail -k https://localhost/ || exit 1" ]
       interval: 3s
       timeout: 5s
       retries: 3
@@ -20,7 +34,9 @@ services:
     depends_on:
       php:
         condition: service_healthy
-      
+      certs:
+        condition: service_completed_successfully
+
   mysql:
     container_name: lemp-mysql
     image: mysql:8.0
@@ -31,7 +47,7 @@ services:
       - mysql-data:/var/lib/mysql
       - ./mysql/init_recetario.sql:/docker-entrypoint-initdb.d/init_recetario.sql:ro
       - ./mysql/seed_recetario.sql:/docker-entrypoint-initdb.d/seed_recetario.sql:ro
-    environment: 
+    environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
@@ -44,6 +60,7 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
   php:
     container_name: lemp-php
     build:
@@ -54,10 +71,18 @@ services:
       - ./php/src:/var/www/html
     restart: unless-stopped
     environment:
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
       MYSQL_DATABASE: ${MYSQL_DATABASE}
       MYSQL_USER: ${MYSQL_USER}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      LOCAL_NOMBRE: ${LOCAL_NOMBRE:-}
+      ADMIN_USER: ${ADMIN_USER:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NOMBRE: ${ADMIN_NOMBRE:-}
+      CHEF_USER: ${CHEF_USER:-}
+      CHEF_PASSWORD: ${CHEF_PASSWORD:-}
+      AYUDANTE_USER: ${AYUDANTE_USER:-}
+      AYUDANTE_PASSWORD: ${AYUDANTE_PASSWORD:-}
+      PERMITIR_REGISTRO: ${PERMITIR_REGISTRO:-0}
     networks:
       - backend
       - frontend
@@ -70,6 +95,7 @@ services:
     depends_on:
       mysql:
         condition: service_healthy
+
 volumes:
   mysql-data:
 
