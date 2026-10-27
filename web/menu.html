@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Menú de hoy</title>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#f8f5f0;color:#1a1a1a;-webkit-font-smoothing:antialiased}
+    main{max-width:560px;margin:0 auto;padding:36px 16px 60px}
+    h1{font-family:Georgia,serif;font-size:28px;font-weight:500;margin-bottom:4px}
+    .fecha{font-size:14px;color:#6b6560;margin-bottom:22px;text-transform:capitalize}
+    .sub{font-size:14px;color:#6b6560;margin-bottom:14px}
+    ul{list-style:none;display:grid;gap:10px}
+    li{background:#fff;border:.5px solid rgba(0,0,0,.16);border-radius:12px;padding:14px 16px}
+    .fila{display:flex;justify-content:space-between;gap:12px;align-items:baseline}
+    .nom{font-family:Georgia,serif;font-size:18px}
+    .precio{font-size:16px;font-weight:500;color:#1d6ef5;white-space:nowrap}
+    .desc{font-size:14px;color:#6b6560;line-height:1.5;margin-top:6px}
+    .vacio{text-align:center;padding:40px 10px;color:#4a4542;font-size:15px}
+    .error{color:#c0392b;font-size:14px;margin-bottom:12px}
+    .pie{margin-top:22px;font-size:13px}
+    a{color:#1d6ef5}
+    form{display:flex;gap:8px;flex-wrap:wrap}
+    input{flex:1;min-width:200px;padding:9px 11px;border:.5px solid rgba(0,0,0,.2);border-radius:8px;font-size:14px}
+    button{padding:9px 16px;border:none;border-radius:8px;background:#2563eb;color:#fff;font-size:14px;cursor:pointer}
+  </style>
+</head>
+<body>
+<main id="app"></main>
+<script>
+(function(){
+  var API='/recetario/api.php';
+  var app=document.getElementById('app');
+
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g,function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+  function fechaLarga(f){
+    var d=new Date(f+'T12:00:00');
+    return isNaN(d)?f:d.toLocaleDateString('es-PE',{weekday:'long',day:'numeric',month:'long'});
+  }
+
+  var local=(new URLSearchParams(location.search).get('local')||'').trim();
+
+  function pedirLocal(msg){
+    app.innerHTML='<h1>Menú de hoy</h1>'+
+      (msg?'<p class="error">'+esc(msg)+'</p>':'')+
+      '<p class="sub">Escribe el código del local.</p>'+
+      '<form id="f"><input id="c" placeholder="ej.: local-de-ejemplo" autocapitalize="none" autocomplete="off"/><button type="submit">Ver menú</button></form>';
+    document.getElementById('f').addEventListener('submit',function(e){
+      e.preventDefault();
+      var v=document.getElementById('c').value.trim();
+      if(v) location.href='menu.html?local='+encodeURIComponent(v);
+    });
+  }
+
+  if(!local){ pedirLocal(''); return; }
+
+  app.innerHTML='<p class="sub">Cargando…</p>';
+  fetch(API+'?entity=menu_publico&local='+encodeURIComponent(local))
+    .then(function(r){
+      return r.json().catch(function(){return null;}).then(function(d){return {ok:r.ok,d:d};});
+    })
+    .then(function(x){
+      if(!x.ok||!x.d||x.d.error){ pedirLocal((x.d&&x.d.error)||'No se pudo cargar el menú'); return; }
+      var d=x.d;
+      var html='<h1>'+esc(d.local)+'</h1><p class="fecha">Menú de hoy · '+esc(fechaLarga(d.fecha))+'</p>';
+      if(!d.platos.length){
+        html+='<p class="vacio">Hoy no hay platos disponibles.</p>';
+      }else{
+        html+='<ul>';
+        d.platos.forEach(function(p){
+          html+='<li><div class="fila"><span class="nom">'+esc(p.nombre)+'</span>'+
+            (p.precio_venta!=null?'<span class="precio">S/ '+Number(p.precio_venta).toFixed(2)+'</span>':'')+
+            '</div>'+(p.descripcion?'<p class="desc">'+esc(p.descripcion)+'</p>':'')+'</li>';
+        });
+        html+='</ul>';
+      }
+      html+='<p class="pie"><a href="menu.html?local='+encodeURIComponent(local)+'">Actualizar</a></p>';
+      app.innerHTML=html;
+    })
+    .catch(function(){
+      app.innerHTML='<p class="error">No se pudo conectar con el servidor.</p>';
+    });
+})();
+</script>
+</body>
+</html>
