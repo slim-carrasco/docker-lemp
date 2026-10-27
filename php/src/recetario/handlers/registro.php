@@ -2,6 +2,7 @@
 defined('RECETARIO') or exit;
 
 $permitido = getenv('PERMITIR_REGISTRO') === '1';
+sembrarUsuariosIniciales($pdo);
 
 if ($method === 'GET') {
     jsonOut(['permitido' => $permitido]);
